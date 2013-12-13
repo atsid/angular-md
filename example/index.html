@@ -1,0 +1,38 @@
+<html>
+    <head></head>
+    <body ng-app="masterDetailApp" style="margin: 10px">
+        <script src="../bower_components/angular/angular.js"></script>
+        <script src="../bower_components/angular-resource/angular-resource.js"></script>
+
+        <script src="app.js"></script>
+        <script src="../src/data/static.js"></script>
+        <script src="../src/directives/masterDetail.js"></script>
+
+        <div master-detail="" style="width:500px">
+            <!-- Master -->
+            <div style="float:left; margin: 0px 20px; padding: 0px" ng-controller="MasterCtrl" master-view="masterConfig">
+                <ul style="padding: 0; margin: 0">
+                    <li ng-repeat="person in people">
+                        <a ng-click="$emit('masterDetailReadItem', person.id);">{{ person.name }}</a>
+                    </li>
+                    <li>
+                        <button ng-click="$emit('masterDetailNewItem');">New</button>
+                    </li>
+                </ul>
+            </div>
+            <!-- Detail -->
+            <div detail-view="detailConfig" ng-switch="!!selectedItem">
+                <form class='span8' name="form" ng-switch-when="true">
+                    <label>Name * <input type="text" ng-model="selectedItem.name" required></label>
+                    <div style="text-align:right">
+                        <button ng-disabled="!form.$valid" ng-click="$emit('masterDetailSaveItem');">Save</button>
+                    </div>
+                </form>
+                <div ng-switch-default>
+                    Select an item in the list.
+                </div>
+            </div>
+
+        </div>
+    </body>
+</html>

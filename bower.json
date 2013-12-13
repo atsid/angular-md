@@ -1,0 +1,14 @@
+{
+    "author": "ATSID",
+    "name": "angular-md",
+    "description": "Master/Detail based routing with CRUD support",
+    "version": "0.0.1",
+    "dependencies": {
+        "angular": "~1.0.8",
+        "angular-resource": "~1.0.8"
+    },
+    "devDependencies": {
+        "angular-mocks": "~1.0.5",
+        "angular-scenario": "~1.0.5"
+    }
+}
