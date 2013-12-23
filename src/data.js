@@ -7,7 +7,8 @@
  * Represents a data source.
  */
 angular.module("atsid.data",[
-    "atsid.data.store"
+    "atsid.data.store",
+    "atsid.data.item"
 ]).provider("dataSource", [function () {
 
     /**
@@ -22,6 +23,7 @@ angular.module("atsid.data",[
                 fields: null,
                 fetches: null,
                 q: null,
+                orderBy: null,
                 count: 100,
                 offset: 0
             },
@@ -101,7 +103,7 @@ angular.module("atsid.data",[
     var globalConfig = {};
     angular.extend(this, dataSourceConfigurationFactory(globalConfig));
 
-    this.$get = ["$q", "httpStore", function ($q, httpStore) {
+    this.$get = ["$q", "httpStore", "arrayStore", function ($q, httpStore, arrayStore) {
 
         /**
          * Gets a data store based on a configuration.
@@ -113,7 +115,8 @@ angular.module("atsid.data",[
             storeConfig = angular.isString(storeConfig) ? { type: "http", name: storeConfig } : storeConfig;
             return {
                 $: httpStore,
-                http: httpStore
+                http: httpStore,
+                array: arrayStore
             }[storeConfig.type || "$"](storeConfig);
         }
 
@@ -210,12 +213,13 @@ angular.module("atsid.data",[
             route.idProperty = config.idProperty || "id";
             route.parent = parentRoute;
             route.name = config.name || (lastPathComponent && lastPathComponent.name) || "";
-            route.pathParams = {};
+            route.pathParam = (lastPathComponent && lastPathComponent.param) || "";
             route.params = config.params || {};
             route.routes = {};
             route.fields = config.fields;
             route.fetches = config.fetches;
             route.q = config.q;
+            route.orderBy = config.orderBy;
 
             // Things that can be inherited
             if (config.count) {
@@ -235,7 +239,8 @@ angular.module("atsid.data",[
                     route.addRoute(routeConfig);
                 });
             }
-
+            // Used for testing equality
+            this._self = this;
             return route;
         }
         Route.prototype = {
@@ -326,28 +331,41 @@ angular.module("atsid.data",[
                     parentName = null;
                 }
 
-                var parentPC;
-                var pcs = this.pathComponents;
                 var parent = this.getParent(parentName);
-                var idProperty = (parent && parent.idProperty) || "id";
-
-                // TODO:  Would be nice to not have to do two lookups (the parent route and the path component)
-                if (pcs.length > 1) {
-                    if (!parentName) {
-                        parentPC = pcs[pcs.length - 2];
-                    } else {
-                        pcs.some(function (pc) {
-                            if (pc.name === parentName) {
-                                parentPC = pc;
-                                return true;
-                            }
-                        });
-                    }
-
-                    if (parentPC) {
-                        this.pathParams[parentPC.param] = item[idProperty];
-                    }
+                if (parent) {
+                    parent.setItem(item);
                 }
+            },
+
+            /**
+             * Get all the path params, including the current route's form
+             * the params argument.
+             * @param  {Object} params Used to retrieve the current route's path param.
+             * @return {Object} All the path params
+             */
+            getPathParams: function (id) {
+                var pathParams = {};
+                var parent = this.getParent();
+                var pcs = this.pathComponents;
+                var i = pcs.length - 2;
+                var pc = pcs[i];
+
+                if (id) {
+                    pathParams[this.pathParam] = id;
+                }
+
+                while (parent && pc) {
+                    pathParams[pc.param] = parent.currentItem && parent.currentItem[parent.idProperty];
+                    parent = parent.getParent();
+                    i -= 1;
+                    pc = pcs[i];
+                }
+
+                return pathParams;
+            },
+
+            setItem: function (item) {
+                this.currentItem = item;
             },
 
             /**
@@ -370,27 +388,12 @@ angular.module("atsid.data",[
             },
 
             /**
-             * Get all the path params, including the current route's form
-             * the params argument.
-             * @param  {Object} params Used to retrieve the current route's path param.
-             * @return {Object} All the path params
-             */
-            getPathParams: function (params) {
-                var pathParams = angular.extend({}, this.pathParams),
-                    pathParamName = this.pathComponents[this.pathComponents.length - 1].param,
-                    pathParam = (params && (params[pathParamName] || params.id)) || null;
-
-                pathParams[pathParamName] = pathParam;
-                return pathParams;
-            },
-
-            /**
              * Gets the path of the route with all the params filled in.
              * @param  {Object} params The params of the current route.
              * @return {String} The final path.
              */
             getPath: function (params) {
-                var pathParams = this.getPathParams(params);
+                var pathParams = this.getPathParams(params[this.idProperty]);
                 return buildPath(this.pathComponents, pathParams);
             },
 
@@ -405,12 +408,13 @@ angular.module("atsid.data",[
                     fetches: this.fetches,
                     q: this.q,
                     count: this.count,
-                    offset: this.offset
+                    offset: this.offset,
+                    orderBy: this.orderBy
                 }, this.params || {}), params);
 
                 this.pathComponents.forEach(function (pc) {
-                    if (storeParams[pc.name]) {
-                        delete storeParams[pc.name];
+                    if (storeParams[pc.param]) {
+                        delete storeParams[pc.param];
                     }
                 });
                 // Remove any undefined properties incase stores do not handle them properly.
@@ -423,6 +427,10 @@ angular.module("atsid.data",[
                 return storeParams;
             },
 
+            isSame: function (otherDataSource) {
+                return otherDataSource._self === this._self;
+            },
+
             /**
              * Helper method to perform CRUD requests.
              * @param  {String} method The crud method.
@@ -433,12 +441,7 @@ angular.module("atsid.data",[
             doRequest: function (method, params, item) {
                 var deferred = $q.defer();
                 params = params || {};
-
-                if (method === "read") {
-                    this.store[method](this.getPath(params), this.getStoreParams(params), deferred);
-                } else {
-                    this.store[method](this.getPath(params), this.getStoreParams(params), item, deferred);
-                }
+                this.store[method](this.getPath(params), this.getStoreParams(params), item, deferred);
                 return deferred.promise;
             },
 
@@ -477,7 +480,7 @@ angular.module("atsid.data",[
              */
             update: function (item) {
                 var params = {};
-                params[this.idProperty] = item[this.idProperty];
+                params[this.pathParam] = item[this.idProperty];
                 return this.doRequest("update", params, item);
             },
 
@@ -502,8 +505,14 @@ angular.module("atsid.data",[
              */
             "delete": function (item) {
                 var params = {};
-                params[this.idProperty] = item[this.idProperty];
-                return this.doRequest("delete", params);
+                var promise;
+                if (!angular.isArray(item)) {
+                    params[this.idProperty] = item[this.idProperty];
+                    promise = this.doRequest("delete", params);
+                } else {
+                    promise = this.doRequest("delete", params, item);
+                }
+                return promise;
             },
 
             /**

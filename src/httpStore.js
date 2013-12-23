@@ -124,15 +124,15 @@ angular.module("atsid.data.store",[
              * @param  {String} url The route"s url.
              * @return {String}
              */
-            buildUrl: function (url, params) {
+            buildUrl: function (url, query) {
                 var baseUrl = this.config.baseUrl || "",
-                    paramList = [];
+                    queryList = [];
                 url = baseUrl + "/" + url;
-                angular.forEach(params, function (value, name) {
-                    paramList.push(name + "=" + value);
+                angular.forEach(query, function (value, name) {
+                    queryList.push(name + "=" + value);
                 });
-                if (paramList.length) {
-                    url += "?" + paramList.join("&");
+                if (queryList.length) {
+                    url += "?" + queryList.join("&");
                 }
                 return url;
             },
@@ -145,38 +145,38 @@ angular.module("atsid.data.store",[
              * @param  {Object} data
              * @param  {Object} deferred         A defer object to pass the response to.
              */
-            doRequest: function (method, url, params, data, deferred) {
+            doRequest: function (method, url, query, data, deferred) {
                 var config = this.config;
-                return $http(angular.extend({
+                return $http({
                     method: method,
-                    url: this.buildUrl(url, params),
+                    url: this.buildUrl(url, query),
                     data: data || null,
                     headers: this.config.headers
-                }), params).then(function (resp) {
+                }).then(function (resp) {
                     deferred.resolve(parseResponse(method.toLowerCase(), config, resp.data));
                 }, function (err) {
                     deferred.reject(err);
                 });
             },
 
-            read: function (url, params, deferred) {
-                this.doRequest("GET", url, params, null, deferred);
+            read: function (url, query, data, deferred) {
+                this.doRequest("GET", url, query, null, deferred);
             },
 
-            create: function (url, params, data, deferred) {
-                this.doRequest("POST", url, params, data, deferred);
+            create: function (url, query, data, deferred) {
+                this.doRequest("POST", url, query, data || null, deferred);
             },
 
-            update: function (url, params, data, deferred) {
-                this.doRequest("PUT", url, params, data, deferred);
+            update: function (url, query, data, deferred) {
+                this.doRequest("PUT", url, query, data || null, deferred);
             },
 
-            patch: function (url, params, data, deferred) {
-                this.doRequest("PATCH", url, params, data, deferred);
+            patch: function (url, query, data, deferred) {
+                this.doRequest("PATCH", url, query, data || null, deferred);
             },
 
-            "delete": function (url, params, data, deferred) {
-                this.doRequest("DELETE", url, params, null, deferred);
+            "delete": function (url, query, data, deferred) {
+                this.doRequest("DELETE", url, query, data || null, deferred);
             }
 
         };

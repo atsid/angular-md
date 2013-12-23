@@ -1,12 +1,10 @@
-var restify = require('restify');
+var express = require('express');
+var server = express();
 
-var server = restify.createServer({
-  name: 'MyApp'
+server.configure(function(){
+  server.use(express.bodyParser());
+  server.use(server.router);
 });
-
-server.use(restify.acceptParser(server.acceptable));
-server.use(restify.queryParser());
-server.use(restify.bodyParser());
 
 var uid = 100;
 function getUid() {
@@ -41,12 +39,14 @@ var contacts = [{
     }],
     addresses = {
         1: [{
+            id: 1,
             street: "123 Beaker st",
             city: "New York",
             state: "New York",
             country: "United States"
         }],
         2: [{
+            id: 2,
             street: "123 Beaker st",
             city: "New York",
             state: "New York",
@@ -75,25 +75,66 @@ function getItemById(array, id) {
     };
 }
 
-server.post('api/contacts', function create(req, res, next) {
-   var contact = req.body;
-   contact.id = getUid();
-   addresses[contact.id] = [];
-   contacts.push(contact);
-   res.send(contact);
-   return next();
-});
-server.put('api/contacts', function (req, res, next) {
-    var contact = req.body,
-        id = req.params.id,
-        foundContact = getItemById(contacts, id);
-    if (foundContact.index !== -1) {
-        contacts.splice(foundContact.index, 1, contact);
+function itemCreate(array, item, callback) {
+    if (item instanceof Array) {
+        return item.map(function (item) {
+            return itemCreate(array, item, callback);
+        });
     }
-    res.send(contact);
-    next();
+    item.id = getUid();
+    if (callback) {
+        callback(item);
+    }
+    array.push(item);
+    return item;
+}
+
+function itemUpdate(array, item) {
+    if (item instanceof Array) {
+        return item.map(function (item) {
+            return itemUpdate(array, item);
+        });
+    }
+
+    var foundItem = getItemById(array, item.id);
+    if (foundItem.index !== -1) {
+        array.splice(foundItem.index, 1, item);
+    }
+    return item;
+}
+
+function itemDelete(array, id, callback) {
+    if (id instanceof Array) {
+        return id.map(function (id) {
+            return itemDelete(array, id, callback);
+        });
+    }
+    var foundItem = getItemById(array, id);
+    if (foundItem.index !== -1) {
+        array.splice(foundItem.index, 1);
+        if (callback) {
+            callback(id);
+        }
+    }
+    return id;
+}
+
+server.post('/api/contacts', function create(req, res, next) {
+   var contact = itemCreate(contacts, req.body, function (item) {
+        addresses[item.id] = [];
+   });
+   res.send(contacts);
+   return
 });
-server.get('api/contacts', function (req, res, next) {
+server.put('/api/contacts/:id', function (req, res, next) {
+    res.send(itemUpdate(contacts, req.body));
+
+});
+server.put('/api/contacts', function (req, res, next) {
+    res.send(itemUpdate(contacts, req.body));
+
+});
+server.get('/api/contacts', function (req, res, next) {
     var offset = req.params.offset || 0,
         count = req.params.count || contacts.length;
 
@@ -103,9 +144,9 @@ server.get('api/contacts', function (req, res, next) {
         count: count,
         total: contacts.length
     });
-    next();
+
 });
-server.get('api/contacts/:id', function (req, res, next) {
+server.get('/api/contacts/:id', function (req, res, next) {
     var id = parseInt(req.params.id, 10),
         foundContact = getItemById(contacts, id);
 
@@ -114,37 +155,32 @@ server.get('api/contacts/:id', function (req, res, next) {
     } else {
         res.send(404);
     }
-    next();
+
 });
-server.del('api/contacts/:id', function rm(req, res, next) {
-    var id = req.params.id,
-        foundContact = getItemById(contacts, id);
-    if (foundContact.index !== -1) {
-        contacts.splice(foundContact.index, 1);
+server.del('/api/contacts/:id', function rm(req, res, next) {
+    itemDelete(contacts, req.params.id, function (id) {
         delete addresses[id];
-    }
+    });
     res.send(204);
-    return next();
+});
+server.del('/api/contacts', function rm(req, res, next) {
+    itemDelete(contacts, req.body.map(function (item) { return item.id; }, function (id) {
+        delete addresses[id];
+    }));
+    res.send(204);
 });
 
-server.post('api/contacts/:id/addresses', function create(req, res, next) {
-   var address = req.body;
-   address.id = getUid();
-   addresses[req.params.id].push(address);
-   res.send(address);
-   return next();
+server.post('/api/contacts/:id/addresses', function create(req, res, next) {
+    res.send(itemCreate(addresses[req.params.id], req.body));
 });
-server.put('api/contacts/:id/addresses/:aid', function (req, res, next) {
-    var address = req.body,
-        addresses = addresses[req.params.id],
-        foundAddress = getItemById(addresses, req.params.aid);
-    if (foundAddress.index !== -1) {
-        contacts.splice(foundAddress.index, 1, address);
-    }
-    res.send(address);
-    next();
+server.put('/api/contacts/:id/addresses/:aid', function (req, res, next) {
+    res.send(itemUpdate(addresses[req.params.id], req.body));
+
 });
-server.get('api/contacts/:id/addresses', function (req, res, next) {
+server.put('/api/contacts/:id/addresses', function (req, res, next) {
+    res.send(itemUpdate(addresses[req.params.id], req.body));
+});
+server.get('/api/contacts/:id/addresses', function (req, res, next) {
     var offset = req.params.offset || 0,
         count = req.params.count || contacts.length;
 
@@ -154,9 +190,8 @@ server.get('api/contacts/:id/addresses', function (req, res, next) {
         count: count,
         total: addresses[req.params.id].length
     });
-    next();
 });
-server.get('api/contacts/:id/addresses/:aid', function (req, res, next) {
+server.get('/api/contacts/:id/addresses/:aid', function (req, res, next) {
     var addresses = addresses[req.params.id],
         foundAddress = getItemById(addresses, req.params.aid);
     if (foundAddress.index !== -1) {
@@ -164,16 +199,15 @@ server.get('api/contacts/:id/addresses/:aid', function (req, res, next) {
     } else {
         res.send(404);
     }
-    next();
+
 });
-server.del('api/contacts/:id/addresses/:aid', function rm(req, res, next) {
-    var addresses = addresses[req.params.id],
-        foundAddress = getItemById(addresses, req.params.aid);
-    if (foundAddress.index !== -1) {
-        addresses.splice(foundAddress.index, 1);
-    }
+server.del('/api/contacts/:id/addresses/:aid', function rm(req, res, next) {
+    itemDelete(addresses[req.params.id], req.params.aid);
     res.send(204);
-    return next();
+});
+server.del('/api/contacts/:id/addresses', function rm(req, res, next) {
+    itemDelete(addresses[req.params.id], req.body.map(function (item) { return item.id; }));
+    res.send(204);
 });
 
 server.listen(9001);

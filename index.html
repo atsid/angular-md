@@ -1,14 +1,23 @@
 <html>
-    <head></head>
+    <head>
+        <style>
+            label {
+                display: block;
+            }
+        </style>
+    </head>
     <body ng-app="masterDetailApp" style="margin: 10px">
         <script src="bower_components/angular/angular.js"></script>
         <script src="src/httpStore.js"></script>
+        <script src="src/ArrayStore.js"></script>
+        <script src="src/itemCollection.js"></script>
         <script src="src/data.js"></script>
 
         <script>
             angular.module('masterDetailApp', [
                 'atsid.data'
-            ]).config(function (httpStoreProvider, dataSourceProvider) {
+            ]).config(["dataSourceProvider", function (dataSourceProvider) {
+
                 dataSourceProvider.setStoreUrl("api");
                 dataSourceProvider.addRoutes([{
                     path: "contacts/:contactId",
@@ -16,55 +25,57 @@
 					path: "contacts/:contactId/addresses/:addressId",
 					fields: "sup"
                 }]);
-            })
-            .controller('MasterCtrl', ['$scope', 'dataSource', function ($scope, dataSource) {
-                var contactDs = dataSource("contacts"),
-					addressDs = contactDs.child("addresses");
 
-                contactDs.query().then(function (resp) {
-                    $scope.contacts = resp.data;
+            }])
+            .controller('MasterCtrl', ['$scope', 'dataSource', "itemCollection", function ($scope, dataSource, itemCollection) {
+
+                $scope.contacts = itemCollection({
+                    saveChildren: true,
+                    dataSource: dataSource("contacts")
                 });
-
-                $scope.selectContact = function (contact) {
+                $scope.contacts.on("didSelectItem", function (e, contact) {
                     $scope.selectedContact = contact;
-                    addressDs.setParentItem(contact);
-                    addressDs.query().then(function (resp) {
-						$scope.addresses = resp.data;
-                    });
-                };
-
-                $scope.saveContact = function (contact) {
-					var isNew = !contact.hasOwnProperty("id");
-					contactDs.save(contact).then(function (resp) {
-						if (isNew) {
-							$scope.contacts.push(resp.data);
-						}
-					});
-                };
-
-                $scope.newContact = function () {
-					$scope.selectedContact = {};
-                };
+                    if (contact) {
+                        contact.child("addresses").query().then(function (addresses) {
+                            $scope.addresses = addresses;
+                        });
+                    }
+                });
 
             }]);
         </script>
 
-        <div style="width:500px" ng-controller="MasterCtrl">
-            <div style="float:left; margin: 0px 20px; padding: 0px">
+        <div style="width:800px" ng-controller="MasterCtrl">
+            <div style="float:left; margin: 0px 20px; padding: 0px; width: 200px">
                 <ul style="padding: 0; margin: 0">
-                    <li ng-repeat="contact in contacts">
-                        <a ng-click="selectContact(contact);">{{ contact.name }}</a>
+                    <li style="text-align:right">
+                        <button ng-click="contacts.createItem({}, true);">New Contact</button>
                     </li>
-                    <li>
-                        <button ng-click="newContact();">New</button>
+                    <li ng-repeat="contact in contacts.getAll()">
+                        <a ng-click="contact.select();">{{ contact.name }}</a>
                     </li>
                 </ul>
             </div>
-            <div ng-switch="!!selectedContact">
+            <div ng-switch="!!selectedContact" style="margin-left:296px">
                 <form class='span8' name="form" ng-switch-when="true">
-                    <label>Name * <input type="text" ng-model="selectedContact.name" required></label>
                     <div style="text-align:right">
-                        <button ng-disabled="!form.$valid" ng-click="saveContact(selectedContact);">Save</button>
+                        <button ng-disabled="!form.$valid" ng-click="selectedContact.delete();">Delete Contact</button>
+                        <button ng-disabled="!form.$valid" ng-click="selectedContact.save();">Save Contact</button>
+                    </div>
+                    <label>Name * <input type="text" ng-model="selectedContact.name" required></label>
+                    <label>Phone Number <input type="text" ng-model="selectedContact.phoneNumber"></label>
+                    <hr>
+                    <div style="text-align:right">
+                        <button ng-disabled="!form.$valid" ng-click="addresses.addItem({});">Add Address</button>
+                    </div>
+                    <div ng-repeat="address in addresses.items" style="margin-bottom:20px">
+                        <div>
+                            <button ng-click="address.delete()">Delete</button>
+                        </div>
+                        <label>Street <input type="text" ng-model="address.street"></label>
+                        <label>City <input type="text" ng-model="address.city"></label>
+                        <label>State <input type="text" ng-model="address.state"></label>
+                        <label>Country <input type="text" ng-model="address.country"></label>
                     </div>
                 </form>
                 <div ng-switch-default>
