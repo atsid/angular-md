@@ -116,7 +116,12 @@ module.exports = function (grunt) {
 
             },
 			dist : {
-				src: ['src/**/*.js'],
+				src: [
+                    'src/httpStore.js',
+                    'src/arrayStore.js',
+                    'src/data.js',
+                    'src/itemCollection.js'
+                ],
                 dest: 'dist/<%= pkg.name %>.js'
 			}
 		},

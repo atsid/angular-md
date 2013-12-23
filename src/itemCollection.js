@@ -1,4 +1,5 @@
 angular.module("atsid.data.item", [
+    "atsid.data"
 ]).provider("itemCollection", [function () {
 
     this.$get = ["dataSource", "arrayStore", "$q", "$timeout", function (dataSource, arrayStore, $q, $timeout) {

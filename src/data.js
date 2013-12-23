@@ -7,8 +7,7 @@
  * Represents a data source.
  */
 angular.module("atsid.data",[
-    "atsid.data.store",
-    "atsid.data.item"
+    "atsid.data.store"
 ]).provider("dataSource", [function () {
 
     /**
