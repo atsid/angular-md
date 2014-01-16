@@ -145,13 +145,13 @@ angular.module("atsid.data.store",[
              * @param  {Object} data
              * @param  {Object} deferred         A defer object to pass the response to.
              */
-            doRequest: function (method, url, query, data, deferred) {
+            doRequest: function (method, url, query, headers, data, deferred) {
                 var config = this.config;
                 return $http({
                     method: method,
                     url: this.buildUrl(url, query),
-                    data: data || null,
-                    headers: this.config.headers
+                    data: data || '',
+                    headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
                     deferred.resolve(parseResponse(method.toLowerCase(), config, resp.data));
                 }, function (err) {
@@ -160,23 +160,23 @@ angular.module("atsid.data.store",[
             },
 
             read: function (url, query, data, deferred) {
-                this.doRequest("GET", url, query, null, deferred);
+                this.doRequest("GET", url, query, {}, null, deferred);
             },
 
             create: function (url, query, data, deferred) {
-                this.doRequest("POST", url, query, data || null, deferred);
+                this.doRequest("POST", url, query, {}, data || null, deferred);
             },
 
             update: function (url, query, data, deferred) {
-                this.doRequest("PUT", url, query, data || null, deferred);
+                this.doRequest("PUT", url, query, {}, data || null, deferred);
             },
 
             patch: function (url, query, data, deferred) {
-                this.doRequest("PATCH", url, query, data || null, deferred);
+                this.doRequest("PATCH", url, query, {}, data || null, deferred);
             },
 
             "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, data || null, deferred);
+                this.doRequest("DELETE", url, query, { "Content-Type": null }, data || null, deferred);
             }
 
         };
@@ -188,6 +188,8 @@ angular.module("atsid.data.store",[
 
     }];
 }]);
+"use strict";
+
 angular.module("atsid.data.store").provider("arrayStore", [function () {
 
     this.$get = [function () {
@@ -364,7 +366,7 @@ angular.module("atsid.data",[
                 offset: 0
             },
             storeConfig: "http",
-            routes: []
+            routes: {}
         });
 
         return {
@@ -419,7 +421,7 @@ angular.module("atsid.data",[
              * @param {Object[]} routeConfigs
              *
              * @example
-             * {
+             * name: {
              *     path: "contacts/:contactId/addresses/:addressId",
              *     fields: "name,phoneNumber"
              * }
@@ -430,8 +432,7 @@ angular.module("atsid.data",[
              * contacts/:contactId/addresses/:addressId
              */
             addRoutes: function (routeConfigs) {
-                routeConfigs = angular.isArray(routeConfigs) ? routeConfigs : [routeConfigs];
-                configObject.routes.push.apply(configObject.routes, routeConfigs);
+                angular.extend(configObject.routes, routeConfigs);
             }
         };
     }
@@ -498,7 +499,7 @@ angular.module("atsid.data",[
                     var name = path[i];
                     var param = path[i + 1];
 
-                    if (param.charAt(0) === ":") {
+                    if (param && param.charAt(0) === ":") {
                         param = param.substr(1);
                     } else {
                         param = null;
@@ -542,13 +543,15 @@ angular.module("atsid.data",[
 
             var pathComponents = route.pathComponents = buildPathComponents(config, parentRoute);
             var lastPathComponent = pathComponents[pathComponents.length - 1];
+            route.config = config;
 
             // Things we don't want to inherit from parent routes.
             route.path = buildPath(pathComponents);
             route.level = parentRoute ? parentRoute.level + 1 : 1;
             route.idProperty = config.idProperty || "id";
             route.parent = parentRoute;
-            route.name = config.name || (lastPathComponent && lastPathComponent.name) || "";
+            route.pathName = (lastPathComponent && lastPathComponent.name) || "";
+            route.name = config.name || route.pathName;
             route.pathParam = (lastPathComponent && lastPathComponent.param) || "";
             route.params = config.params || {};
             route.routes = {};
@@ -556,6 +559,7 @@ angular.module("atsid.data",[
             route.fetches = config.fetches;
             route.q = config.q;
             route.orderBy = config.orderBy;
+            route.transformers = config.transformers || [];
 
             // Things that can be inherited
             if (config.count) {
@@ -566,17 +570,33 @@ angular.module("atsid.data",[
             }
 
             // Things that must be inherited
-            if (config.store && !parentRoute) {
-                route.store = config.store;
+            if (!parentRoute) {
+                if (config.store) {
+                    route.store = config.store;
+                }
+                route.nameToRoute = {};
+            }
+
+            if (config.name) {
+                route.nameToRoute[config.name] = route;
             }
 
             if (config.routes) {
-                config.routes.forEach(function (routeConfig) {
+                angular.forEach(config.routes, function (routeConfig, path) {
+                    if (!routeConfig.path) {
+                        routeConfig.path = path;
+                    } else {
+                        routeConfig.name = path;
+                    }
+
+                    if (routeConfig.path.charAt(0) !== "/" && route.path) {
+                        routeConfig.path = route.path + "/" + routeConfig.path;
+                    }
                     route.addRoute(routeConfig);
                 });
             }
-            // Used for testing equality
-            this._self = this;
+            // Used for testing equality with instances of the same route.
+            route._self = route;
             return route;
         }
         Route.prototype = {
@@ -589,7 +609,8 @@ angular.module("atsid.data",[
             addRoute: function (routeConfig) {
                 var parentRoute = routeConfig.path ? this.getRouteByPath(routeConfig.path, true) : this;
                 var route = new Route(routeConfig, parentRoute);
-                parentRoute.routes[route.name] = route;
+                parentRoute.routes[route.pathName] = route;
+                return route;
             },
 
             /**
@@ -603,7 +624,7 @@ angular.module("atsid.data",[
                 if (!routeConfig.name && !routeConfig.path) {
                     throw new Error("Cannot create route without a name or path.");
                 }
-                var route = this.routes[routeConfig.name];
+                var route = this.nameToRoute[routeConfig.name] || this.getRouteByPath(routeConfig.path);
                 return route ? route.getInstance(routeConfig) : new Route(routeConfig, this);
             },
 
@@ -629,12 +650,7 @@ angular.module("atsid.data",[
                     pathComponents = pathComponents.slice(0, pathComponents.length - 1);
                 }
                 pathComponents.forEach(function (pathComponent) {
-                    var childRoute = route.routes[pathComponent.name];
-                    if (childRoute) {
-                        route = childRoute;
-                    } else {
-                        throw new Error("Missing route " + pathComponent.name + " when creating " + route.path + ".");
-                    }
+                    route = route.routes[pathComponent.name] || route.addRoute({ path: pathComponent.name });
                 });
                 return route;
             },
@@ -679,19 +695,19 @@ angular.module("atsid.data",[
              * @param  {Object} params Used to retrieve the current route's path param.
              * @return {Object} All the path params
              */
-            getPathParams: function (id) {
+            getPathParams: function (params) {
                 var pathParams = {};
                 var parent = this.getParent();
                 var pcs = this.pathComponents;
                 var i = pcs.length - 2;
                 var pc = pcs[i];
 
-                if (id) {
-                    pathParams[this.pathParam] = id;
+                if (params[this.idProperty]) {
+                    pathParams[this.pathParam] = params[this.idProperty];
                 }
 
                 while (parent && pc) {
-                    pathParams[pc.param] = parent.currentItem && parent.currentItem[parent.idProperty];
+                    pathParams[pc.param] = params[pc.param] || (parent.currentItem && parent.currentItem[parent.idProperty]);
                     parent = parent.getParent();
                     i -= 1;
                     pc = pcs[i];
@@ -720,6 +736,7 @@ angular.module("atsid.data",[
                     InstanceProto.prototype = this;
                     instance = new InstanceProto();
                 }
+                instance.config = angular.extend(angular.copy(this.config), config);
                 return angular.extend(instance, config || {});
             },
 
@@ -729,8 +746,13 @@ angular.module("atsid.data",[
              * @return {String} The final path.
              */
             getPath: function (params) {
-                var pathParams = this.getPathParams(params[this.idProperty]);
+                var pathParams = this.getPathParams(params);
                 return buildPath(this.pathComponents, pathParams);
+            },
+
+            getUrl: function (pathParams, queryParams) {
+                var url = this.getPath(pathParams);
+                return this.store.buildUrl(url, queryParams || {});
             },
 
             /**
@@ -767,6 +789,47 @@ angular.module("atsid.data",[
                 return otherDataSource._self === this._self;
             },
 
+            runTransformers: function (type, newItems, oldItems) {
+                var tMap = this.transformerMap;
+                var deferred = $q.defer();
+                if (!tMap) {
+                    tMap = this.transformerMap = {};
+                    (this.transformers || []).forEach(function (transformer) {
+                        var tList = tMap[transformer.type] = tMap[transformer.type] || [];
+                        tList.push(transformer);
+                    });
+                }
+
+                var tList = tMap[type];
+                if (tList && newItems) {
+                    var nextTransform = function (i, items) {
+                        var tDeferred = $q.defer();
+                        var transformer = tList[i];
+                        if (transformer) {
+                            if (oldItems !== undefined) {
+                                transformer.transform(items, oldItems, tDeferred);
+                            } else {
+                                transformer.transform(items, tDeferred);
+                            }
+                            tDeferred.promise.then(function (items) {
+                                nextTransform(i + 1, items);
+                            }, function (err) {
+                                deferred.reject(err);
+                            });
+                        } else {
+                            deferred.resolve(items);
+                        }
+                    };
+
+                    nextTransform(0, newItems);
+
+                } else {
+                    deferred.resolve(newItems);
+                }
+
+                return deferred.promise;
+            },
+
             /**
              * Helper method to perform CRUD requests.
              * @param  {String} method The crud method.
@@ -775,10 +838,39 @@ angular.module("atsid.data",[
              * @return {Object} A promise to handle the response.
              */
             doRequest: function (method, params, item) {
-                var deferred = $q.defer();
-                params = params || {};
-                this.store[method](this.getPath(params), this.getStoreParams(params), item, deferred);
-                return deferred.promise;
+                var requestDeferred = $q.defer();
+                var promise = requestDeferred.promise;
+                var isArray = angular.isArray(item);
+                var oldItems = !item || isArray ? item : [item];
+                var self = this;
+                params = angular.extend(angular.copy(this.params || {}), params || {});
+
+                this.runTransformers("request", oldItems).then(function (transformedItem) {
+                    var deferred = $q.defer();
+                    if (transformedItem && !isArray) {
+                        transformedItem = transformedItem[0];
+                    }
+
+                    deferred.promise.then(function (resp) {
+                        var isArray = angular.isArray(resp.data);
+                        var newItems = !resp.data || isArray ? resp.data : [resp.data];
+
+                        self.runTransformers("response", newItems, oldItems || []).then(function (item) {
+                            if (!isArray) {
+                                item = item[0];
+                            }
+                            resp.data = item;
+                            requestDeferred.resolve(resp);
+                        }, function (err) {
+                            requestDeferred.reject(err);
+                        });
+                    });
+
+                    self.store[method](self.getPath(params), self.getStoreParams(params), item, deferred);
+                }, function (err) {
+                    requestDeferred.reject(err);
+                });
+                return promise;
             },
 
             /**
@@ -816,7 +908,7 @@ angular.module("atsid.data",[
              */
             update: function (item) {
                 var params = {};
-                params[this.pathParam] = item[this.idProperty];
+                params[this.idProperty] = item[this.idProperty];
                 return this.doRequest("update", params, item);
             },
 

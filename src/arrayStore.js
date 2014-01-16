@@ -1,3 +1,5 @@
+"use strict";
+
 angular.module("atsid.data.store").provider("arrayStore", [function () {
 
     this.$get = [function () {

@@ -1,3 +1,5 @@
+"use strict";
+
 angular.module("atsid.data.store",[
 
 /**
@@ -145,13 +147,13 @@ angular.module("atsid.data.store",[
              * @param  {Object} data
              * @param  {Object} deferred         A defer object to pass the response to.
              */
-            doRequest: function (method, url, query, data, deferred) {
+            doRequest: function (method, url, query, headers, data, deferred) {
                 var config = this.config;
                 return $http({
                     method: method,
                     url: this.buildUrl(url, query),
-                    data: data || null,
-                    headers: this.config.headers
+                    data: data || '',
+                    headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
                     deferred.resolve(parseResponse(method.toLowerCase(), config, resp.data));
                 }, function (err) {
@@ -160,23 +162,23 @@ angular.module("atsid.data.store",[
             },
 
             read: function (url, query, data, deferred) {
-                this.doRequest("GET", url, query, null, deferred);
+                this.doRequest("GET", url, query, {}, null, deferred);
             },
 
             create: function (url, query, data, deferred) {
-                this.doRequest("POST", url, query, data || null, deferred);
+                this.doRequest("POST", url, query, {}, data || null, deferred);
             },
 
             update: function (url, query, data, deferred) {
-                this.doRequest("PUT", url, query, data || null, deferred);
+                this.doRequest("PUT", url, query, {}, data || null, deferred);
             },
 
             patch: function (url, query, data, deferred) {
-                this.doRequest("PATCH", url, query, data || null, deferred);
+                this.doRequest("PATCH", url, query, {}, data || null, deferred);
             },
 
             "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, data || null, deferred);
+                this.doRequest("DELETE", url, query, { "Content-Type": null }, data || null, deferred);
             }
 
         };
