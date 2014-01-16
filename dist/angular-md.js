@@ -366,7 +366,10 @@ angular.module("atsid.data",[
                 q: null,
                 orderBy: null,
                 count: 100,
-                offset: 0
+                offset: 0,
+
+                // If a route doesn't exist when the child() method is used, it is auto created on the fly.
+                allowAutomaticRoutes: true
             },
             storeConfig: "http",
             routes: {}
@@ -472,10 +475,14 @@ angular.module("atsid.data",[
             var path = [];
             var lastIndex = pathComponents.length - 1;
             pathComponents.forEach(function (pathComponent) {
-                var pathParam = pathParams ? pathParams[pathComponent.param] || null : ":" + pathComponent.param;
-                path.push(pathComponent.name);
-                if (pathParam !== null) {
-                    path.push(pathParam);
+                if (pathComponent.name !== null) {
+                    path.push(pathComponent.name);
+                }
+                if (pathComponent.param !== null) {
+                    var paramValue = pathParams ? pathParams[pathComponent.param] || null : ":" + pathComponent.param;
+                    if (paramValue) {
+                        path.push(paramValue);
+                    }
                 }
             });
             return path.join("/");
@@ -501,6 +508,12 @@ angular.module("atsid.data",[
                 while(i < path.length) {
                     var name = path[i];
                     var param = path[i + 1];
+
+                    if (name.charAt(0) === ":") {
+                        param = name;
+                        name = null;
+                        i -= 1;
+                    }
 
                     if (param && param.charAt(0) === ":") {
                         param = param.substr(1);
@@ -578,6 +591,7 @@ angular.module("atsid.data",[
                     route.store = config.store;
                 }
                 route.nameToRoute = {};
+                route.allowAutomaticRoutes = config.allowAutomaticRoutes;
             }
 
             if (config.name) {
@@ -610,9 +624,11 @@ angular.module("atsid.data",[
              * @param {Object} routeConfig
              */
             addRoute: function (routeConfig) {
+                this._adding = true;
                 var parentRoute = routeConfig.path ? this.getRouteByPath(routeConfig.path, true) : this;
                 var route = new Route(routeConfig, parentRoute);
                 parentRoute.routes[route.pathName] = route;
+                this._adding = false;
                 return route;
             },
 
@@ -627,8 +643,15 @@ angular.module("atsid.data",[
                 if (!routeConfig.name && !routeConfig.path) {
                     throw new Error("Cannot create route without a name or path.");
                 }
-                var route = this.nameToRoute[routeConfig.name] || this.getRouteByPath(routeConfig.path);
-                return route ? route.getInstance(routeConfig) : new Route(routeConfig, this);
+                var route = this.nameToRoute[routeConfig.name] || this.getRouteByPath(routeConfig.path || routeConfig.name);
+                if (!route) {
+                    if(this.allowAutomaticRoutes) {
+                        route = new Route(routeConfig, this);
+                    } else {
+                        throw new Error("Route \"" + (routeConfig.path || routeConfig.name) + "\" does not exist.");
+                    }
+                }
+                return route.getInstance(routeConfig);
             },
 
             /**
@@ -648,14 +671,24 @@ angular.module("atsid.data",[
              * @return {Object}
              */
             getRouteByPathComponents: function (pathComponents, skipLast) {
-                var route = this;
+                var currentRoute = this;
                 if (skipLast) {
                     pathComponents = pathComponents.slice(0, pathComponents.length - 1);
                 }
-                pathComponents.forEach(function (pathComponent) {
-                    route = route.routes[pathComponent.name] || route.addRoute({ path: pathComponent.name });
+                pathComponents.every(function (pathComponent) {
+                    var route = currentRoute.routes[pathComponent.name];
+                    if (!route) {
+                        if (currentRoute._adding || currentRoute.allowAutomaticRoutes) {
+                            route = currentRoute.addRoute({ path: pathComponent.name });
+                        } else {
+                            currentRoute = undefined;
+                            return false;
+                        }
+                    }
+                    route = currentRoute;
+                    return true;
                 });
-                return route;
+                return currentRoute;
             },
 
             /**
@@ -704,9 +737,10 @@ angular.module("atsid.data",[
                 var pcs = this.pathComponents;
                 var i = pcs.length - 2;
                 var pc = pcs[i];
+                var itemParam = params[this.idProperty] || params[this.pathParam];
 
-                if (params[this.idProperty]) {
-                    pathParams[this.pathParam] = params[this.idProperty];
+                if (itemParam) {
+                    pathParams[this.pathParam] = itemParam;
                 }
 
                 while (parent && pc) {
@@ -918,7 +952,12 @@ angular.module("atsid.data",[
              * @return {Object} promise
              */
             create: function (item) {
-                return this.doRequest("create", null, item);
+                var itemParam = item[this.idProperty] || item[this.pathParam];
+                var params = {};
+                if (itemParam) {
+                    params[this.pathParam] = itemParam;
+                }
+                return this.doRequest("create", params, item);
             },
 
             /**
@@ -1046,7 +1085,9 @@ angular.module("atsid.data",[
 
         dataSource.createDataSource = function (configFunc) {
             var config = {};
-            configFunc(dataSourceConfigurationFactory(config));
+            var configObj = dataSourceConfigurationFactory(config);
+
+            configFunc.call(configObj, configObj);
             return new DataSource(config);
         };
 
