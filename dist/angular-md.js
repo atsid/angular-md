@@ -1,3 +1,5 @@
+"use strict";
+
 angular.module("atsid.data.store",[
 
 /**
@@ -338,6 +340,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
     }];
 }]);
 "use strict";
+
 /**
  * @ngdoc provider
  * @name atsid.data:dataSource
@@ -750,6 +753,12 @@ angular.module("atsid.data",[
                 return buildPath(this.pathComponents, pathParams);
             },
 
+            /**
+             * Returns the url of the route.
+             * @param  {Object} pathParams
+             * @param  {Object} queryParams
+             * @return {String}
+             */
             getUrl: function (pathParams, queryParams) {
                 var url = this.getPath(pathParams);
                 return this.store.buildUrl(url, queryParams || {});
@@ -785,10 +794,21 @@ angular.module("atsid.data",[
                 return storeParams;
             },
 
+            /**
+             * Is the route instance the same as another.
+             * @param {Route} otherDataSource Route to compare to.
+             */
             isSame: function (otherDataSource) {
                 return otherDataSource._self === this._self;
             },
 
+            /**
+             * Runs any transformers of a given type.
+             * @param {String} type
+             * @param {Object[]} newItems the source to transform.
+             * @param {Object[]} oldItems the original items before a request to the server (if the type is response).
+             * @private
+             */
             runTransformers: function (type, newItems, oldItems) {
                 var tMap = this.transformerMap;
                 var deferred = $q.defer();
@@ -950,6 +970,64 @@ angular.module("atsid.data",[
              */
             remove: function (item) {
                 return this["delete"](item);
+            },
+
+            /**
+             * Perform a batch of operations without dealing with promise management.
+             * A function is passed in, with the route as a parameter.  The batchFn's scope
+             * is a custom batch route.  Within the function call actions as "this.read()".  This essentially creates
+             * a client side transaction. An array can optionally be passed in to run the batch
+             * function on each item.  It still only creates a single transaction.
+             * @param {Object[]} [array] An array of items.
+             * @param  {Function} batchFn
+             * @return {Promise}
+             */
+            batch: function (array, batchFn) {
+                var promises = [];
+                var realRoute = this;
+
+                if (!batchFn) {
+                    batchFn = array;
+                    array = null;
+                }
+
+                var callMethod = function (methodName, args) {
+                    return realRoute.query.apply(realRoute, args);
+                };
+
+                var fakeRoute = this.getInstance({
+                    query: function () {
+                        promises.push(callMethod("query", arguments));
+                    },
+                    get: function () {
+                        promises.push(callMethod("get", arguments));
+                    },
+                    create: function () {
+                        promises.push(callMethod("create", arguments));
+                    },
+                    update: function () {
+                        promises.push(callMethod("update", arguments));
+                    },
+                    save: function () {
+                        promises.push(callMethod("save", arguments));
+                    },
+                    "delete": function () {
+                        promises.push(callMethod("update", arguments));
+                    },
+                    remove: function () {
+                        promises.push(callMethod("update", arguments));
+                    }
+                });
+
+                if (array) {
+                    array.forEach(function (item, i) {
+                        batchFn.call(fakeRoute, item, i);
+                    });
+                } else {
+                    batchFn.call(fakeRoute);
+                }
+
+                return $q.all(promises);
             }
         };
 

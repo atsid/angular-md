@@ -629,6 +629,64 @@ angular.module("atsid.data",[
              */
             remove: function (item) {
                 return this["delete"](item);
+            },
+
+            /**
+             * Perform a batch of operations without dealing with promise management.
+             * A function is passed in, with the route as a parameter.  The batchFn's scope
+             * is a custom batch route.  Within the function call actions as "this.read()".  This essentially creates
+             * a client side transaction. An array can optionally be passed in to run the batch
+             * function on each item.  It still only creates a single transaction.
+             * @param {Object[]} [array] An array of items.
+             * @param  {Function} batchFn
+             * @return {Promise}
+             */
+            batch: function (array, batchFn) {
+                var promises = [];
+                var realRoute = this;
+
+                if (!batchFn) {
+                    batchFn = array;
+                    array = null;
+                }
+
+                var callMethod = function (methodName, args) {
+                    return realRoute.query.apply(realRoute, args);
+                };
+
+                var fakeRoute = this.getInstance({
+                    query: function () {
+                        promises.push(callMethod("query", arguments));
+                    },
+                    get: function () {
+                        promises.push(callMethod("get", arguments));
+                    },
+                    create: function () {
+                        promises.push(callMethod("create", arguments));
+                    },
+                    update: function () {
+                        promises.push(callMethod("update", arguments));
+                    },
+                    save: function () {
+                        promises.push(callMethod("save", arguments));
+                    },
+                    "delete": function () {
+                        promises.push(callMethod("update", arguments));
+                    },
+                    remove: function () {
+                        promises.push(callMethod("update", arguments));
+                    }
+                });
+
+                if (array) {
+                    array.forEach(function (item, i) {
+                        batchFn.call(fakeRoute, item, i);
+                    });
+                } else {
+                    batchFn.call(fakeRoute);
+                }
+
+                return $q.all(promises);
             }
         };
 
