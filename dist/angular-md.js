@@ -1030,31 +1030,42 @@ angular.module("atsid.data",[
                     array = null;
                 }
 
-                var callMethod = function (methodName, args) {
-                    return realRoute.query.apply(realRoute, args);
-                };
+                var createFakePromise = function (promise) {
+                        return {
+                            then: function (success, error) {
+                                var p = promise.then(success, error);
+                                promises.push(p);
+                                return createFakePromise(p);
+                            }
+                        };
+                    },
+                    callMethod = function (methodName, args) {
+                        var promise = realRoute.query.apply(realRoute, args);
+                        promises.push(promise);
+                        return createFakePromise(promise);
+                    };
 
                 var fakeRoute = this.getInstance({
                     query: function () {
-                        promises.push(callMethod("query", arguments));
+                        return callMethod("query", arguments);
                     },
                     get: function () {
-                        promises.push(callMethod("get", arguments));
+                        return callMethod("get", arguments);
                     },
                     create: function () {
-                        promises.push(callMethod("create", arguments));
+                        return callMethod("create", arguments);
                     },
                     update: function () {
-                        promises.push(callMethod("update", arguments));
+                        return callMethod("update", arguments);
                     },
                     save: function () {
-                        promises.push(callMethod("save", arguments));
+                        return callMethod("save", arguments);
                     },
                     "delete": function () {
-                        promises.push(callMethod("update", arguments));
+                        return callMethod("update", arguments);
                     },
                     remove: function () {
-                        promises.push(callMethod("update", arguments));
+                        return callMethod("update", arguments);
                     }
                 });
 

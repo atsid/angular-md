@@ -143,8 +143,6 @@ module.exports = function (grunt) {
 		}
 	});
 
-    grunt.loadTasks("tasks");
-
 	grunt.registerTask('server', function (target) {
 		if (target === 'dist') {
 			return grunt.task.run(['configureProxies', 'connect:dist:keepalive']);
