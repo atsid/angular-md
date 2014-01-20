@@ -398,7 +398,7 @@ angular.module("atsid.data",[
                 var pc = pcs[i];
                 var itemParam = params[this.idProperty] || params[this.pathParam];
 
-                if (itemParam) {
+                if (itemParam !== undefined && itemParam !== null) {
                     pathParams[this.pathParam] = itemParam;
                 }
 
@@ -699,7 +699,7 @@ angular.module("atsid.data",[
                         };
                     },
                     callMethod = function (methodName, args) {
-                        var promise = realRoute.query.apply(realRoute, args);
+                        var promise = realRoute[methodName].apply(realRoute, args);
                         promises.push(promise);
                         return createFakePromise(promise);
                     };
@@ -721,10 +721,10 @@ angular.module("atsid.data",[
                         return callMethod("save", arguments);
                     },
                     "delete": function () {
-                        return callMethod("update", arguments);
+                        return callMethod("delete", arguments);
                     },
                     remove: function () {
-                        return callMethod("update", arguments);
+                        return callMethod("delete", arguments);
                     }
                 });
 
