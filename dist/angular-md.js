@@ -178,7 +178,7 @@ angular.module("atsid.data.store",[
             },
 
             "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, { "Content-Type": null }, data || null, deferred);
+                this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data || null, deferred);
             }
 
         };
