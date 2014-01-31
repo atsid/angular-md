@@ -556,7 +556,10 @@ angular.module("atsid.data",[
                 var isArray = angular.isArray(item);
                 var oldItems = !item || isArray ? item : [item];
                 var self = this;
+
                 params = angular.extend(angular.copy(this.params || {}), params || {});
+                var path = this.getPath(params);
+                var queryParams = this.getStoreParams(params);
 
                 this.runTransformers("request", oldItems).then(function (transformedItem) {
                     var deferred = $q.defer();
@@ -579,7 +582,7 @@ angular.module("atsid.data",[
                         });
                     });
 
-                    self.store[method](self.getPath(params), self.getStoreParams(params), item, deferred);
+                    self.store[method](path, queryParams, item, deferred);
                 }, function (err) {
                     requestDeferred.reject(err);
                 });
