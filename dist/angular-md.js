@@ -222,32 +222,32 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
             this.config = angular.extend(angular.extend({}, defaults), config);
         }
 
-        /**
-         * Gets the value of a property from the given path.
-         * @param  {String} path   The path to the property.
-         * @param  {Object} object The object they path searches.
-         * @return {*}        The value of the path.
-         */
-        function getValueAtPath (path, object) {
-            var pathComponents = (path || "").split("/"),
-                value;
-
-            var currentObject;
-            if (pathComponents.length > 1 || pathComponents[0]) {
-                currentObject = object;
-                pathComponents.every(function (pathComponent) {
-                    currentObject = currentObject[pathComponent];
-                    if (currentObject) {
-                        value = currentObject;
-                        return true;
-                    }
-                });
-            }
-
-            return currentObject;
-        }
-
         HTTPStore.prototype = store({
+
+            /**
+             * Gets the value of a property from the given path.
+             * @param  {String} path   The path to the property.
+             * @param  {Object} object The object they path searches.
+             * @return {*}        The value of the path.
+             */
+            getValueAtPath: function (path, object) {
+                var pathComponents = (path || "").split("/"),
+                    value;
+
+                var currentObject;
+                if (pathComponents.length > 1 || pathComponents[0]) {
+                    currentObject = object;
+                    pathComponents.every(function (pathComponent) {
+                        currentObject = currentObject[pathComponent];
+                        if (currentObject) {
+                            value = currentObject;
+                            return true;
+                        }
+                    });
+                }
+
+                return currentObject;
+            },
 
             /**
              * Parses the response of an http request.
@@ -257,11 +257,11 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
              * @return {Object}        A dataSource compliant response object.
              */
             parseResponse: function (method, config, resp) {
-                var respConfig = getValueAtPath("methods/" + method + "response", config) || config.response,
+                var respConfig = this.getValueAtPath("methods/" + method + "response", config) || config.response,
                     paths = respConfig.paths || {},
-                    data = getValueAtPath(paths.data, resp) || resp;
+                    data = this.getValueAtPath(paths.data, resp) || resp;
 
-                return this.createResponse(data, getValueAtPath(paths.offset, resp), getValueAtPath(paths.total, resp));
+                return this.createResponse(data, this.getValueAtPath(paths.offset, resp), this.getValueAtPath(paths.total, resp));
             },
 
             /**
@@ -306,29 +306,29 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
             },
 
             read: function (url, query, data, deferred) {
-                this.doRequest("GET", url, query, {}, null, deferred);
+                this.doRequest("GET", url, query, {}, data, deferred);
             },
 
             create: function (url, query, data, deferred) {
-                this.doRequest("POST", url, query, {}, data || null, deferred);
+                this.doRequest("POST", url, query, {}, data, deferred);
             },
 
             update: function (url, query, data, deferred) {
-                this.doRequest("PUT", url, query, {}, data || null, deferred);
+                this.doRequest("PUT", url, query, {}, data, deferred);
             },
 
             patch: function (url, query, data, deferred) {
-                this.doRequest("PATCH", url, query, {}, data || null, deferred);
+                this.doRequest("PATCH", url, query, {}, data, deferred);
             },
 
             "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data || null, deferred);
+                this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data, deferred);
             }
 
         });
 
         return function (config) {
-            config = angular.isString(config) ? { name: config } : config;
+            config = angular.isString(config) ? { name: config } : config || {};
             return new HTTPStore(config);
         };
 
