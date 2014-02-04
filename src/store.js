@@ -80,7 +80,7 @@ angular.module("atsid.data.store", ["atsid.namedError", "atsid.eventable"]).prov
                     }
 
                     return currentObject;
-                },
+                }
 
 
             }, config));
