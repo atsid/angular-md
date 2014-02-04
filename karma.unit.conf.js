@@ -23,7 +23,7 @@ module.exports = function(config) {
       'src/httpStore.js',
       'src/data.js',
       'src/itemCollection.js',
-      'test/*.js'
+      'test/unit/**.js'
     ],
 
     preprocessors: {

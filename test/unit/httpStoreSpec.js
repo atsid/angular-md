@@ -46,23 +46,6 @@ describe('Service: http store', function () {
 
     describe("Utility methods", function () {
 
-        it("should get the value at a long path", function () {
-            var results = "passed";
-            var objectGraph = { path1: { path2: { path3: results }}};
-            expect(store.getValueAtPath("path1/path2/path3", objectGraph)).toBe(results);
-        });
-
-        it("should get the value at a short path", function () {
-            var results = "passed";
-            var objectGraph = { path1: { path2: "value" }, path1A: results };
-            expect(store.getValueAtPath("path1A", objectGraph)).toBe(results);
-        });
-
-        it("should return nothing if there is no path", function () {
-            var objectGraph = { path1: { path2: "value" }};
-            expect(store.getValueAtPath("", objectGraph)).toBe(undefined);
-        });
-
         it("should build a url", function () {
             var query = { offset: 10, orderBy: "name" };
             var path = "items";

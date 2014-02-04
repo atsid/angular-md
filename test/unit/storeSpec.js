@@ -41,4 +41,22 @@ describe('Service: store', function () {
         expect(resp.total).toBe(total);
     });
 
+    it("should get the value at a long path", function () {
+        var results = "passed";
+        var objectGraph = { path1: { path2: { path3: results }}};
+        expect(testStore.getValueAtPath("path1/path2/path3", objectGraph)).toBe(results);
+    });
+
+    it("should get the value at a short path", function () {
+        var results = "passed";
+        var objectGraph = { path1: { path2: "value" }, path1A: results };
+        expect(testStore.getValueAtPath("path1A", objectGraph)).toBe(results);
+    });
+
+    it("should return nothing if there is no path", function () {
+        var objectGraph = { path1: { path2: "value" }};
+        expect(testStore.getValueAtPath("", objectGraph)).toBe(undefined);
+    });
+
+
 });

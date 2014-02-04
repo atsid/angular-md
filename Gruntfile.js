@@ -107,9 +107,13 @@ module.exports = function (grunt) {
 		},
 		karma : {
 			unit : {
-				configFile : 'karma.conf.js',
+				configFile : 'karma.unit.conf.js',
 				singleRun : true
 			}
+            // cucumber : {
+            //     configFile : 'karma.cucumber.conf.js',
+            //     singleRun : true
+            // }
 		},
 		concat : {
             options: {
