@@ -117,6 +117,7 @@ module.exports = function (grunt) {
             },
 			dist : {
 				src: [
+                    'src/namedError.js',
                     'src/eventable.js',
                     'src/store.js',
                     'src/httpStore.js',

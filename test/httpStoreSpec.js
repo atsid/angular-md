@@ -1,6 +1,7 @@
 describe('Service: http store', function () {
-
+    var provider;
     beforeEach(module("atsid.data.store", function (httpStoreProvider) {
+        provider = httpStoreProvider;
         httpStoreProvider.addStore({
             name: "test",
             baseUrl: "api"
@@ -33,7 +34,13 @@ describe('Service: http store', function () {
         httpMock = $httpBackend;
     }));
 
-    describe("Private methods", function () {
+    describe("Provider", function () {
+
+        it("should not allow a store without a name", function () {
+            expect(function () {
+                provider.addStore({});
+            }).toThrow(new Error("Global http store defaults require a name.")); // fragile
+        });
 
     });
 

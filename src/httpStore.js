@@ -18,7 +18,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
      */
     this.addStore = function (config) {
         if (!angular.isString(config.name)) {
-            throw new Error("global http store defaults require a name.");
+            throw new Error("Global http store defaults require a name.");
         }
         defaultConfigs[config.name] = config;
     };

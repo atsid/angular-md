@@ -1,22 +1,11 @@
 "use strict";
 
-angular.module("atsid.data.store", ["atsid.eventable"]).provider("store", function () {
+angular.module("atsid.data.store", ["atsid.namedError", "atsid.eventable"]).provider("store", function () {
 
-    var errorFactory = function (name, defaultMessage) {
-        var ErrorCtr = function (message) {
-            this.name = name;
-            this.message = message || defaultMessage;
+    this.$get = ["namedError", "eventable", function (namedError, eventable) {
+        var errors = {
+            NotImlementedError: namedError("NotImlementedError", "Not implemented")
         };
-        ErrorCtr.prototype = Error.prototype;
-
-        return ErrorCtr;
-    };
-
-    var errors = {
-        NotImlementedError: errorFactory("NotImlementedError", "Not implemented")
-    };
-
-    this.$get = ["eventable", function (eventable) {
         var storeFactory = function (config) {
             return eventable(angular.extend({
 

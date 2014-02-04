@@ -16,6 +16,7 @@ module.exports = function(config) {
     files: [
       'bower_components/angular/angular.js',
       'bower_components/angular-mocks/angular-mocks.js',
+      'src/namedError.js',
       'src/eventable.js',
       'src/store.js',
       'src/arrayStore.js',
