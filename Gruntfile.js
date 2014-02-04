@@ -117,6 +117,8 @@ module.exports = function (grunt) {
             },
 			dist : {
 				src: [
+                    'src/eventable.js',
+                    'src/store.js',
                     'src/httpStore.js',
                     'src/arrayStore.js',
                     'src/data.js',
@@ -165,7 +167,7 @@ module.exports = function (grunt) {
 	grunt.registerTask('build', [
         'clean:dist',
         'jshint',
-        //'test',
+        'test',
         'concat',
         'ngmin',
         'uglify'

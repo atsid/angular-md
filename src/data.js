@@ -8,6 +8,7 @@
  * Represents a data source.
  */
 angular.module("atsid.data",[
+    "atsid.eventable",
     "atsid.data.store"
 ]).provider("dataSource", [function () {
 
@@ -105,7 +106,7 @@ angular.module("atsid.data",[
     var globalConfig = {};
     angular.extend(this, dataSourceConfigurationFactory(globalConfig));
 
-    this.$get = ["$q", "httpStore", "arrayStore", function ($q, httpStore, arrayStore) {
+    this.$get = ["$q", "httpStore", "arrayStore", "eventable", function ($q, httpStore, arrayStore, eventable) {
 
         /**
          * Gets a data store based on a configuration.
@@ -275,7 +276,7 @@ angular.module("atsid.data",[
             route._self = route;
             return route;
         }
-        Route.prototype = {
+        Route.prototype = eventable({
 
             /**
              * Add a new route.  This will add a permanent child route with
@@ -676,9 +677,24 @@ angular.module("atsid.data",[
             /**
              * Perform a batch of operations without dealing with promise management.
              * A function is passed in, with the route as a parameter.  The batchFn's scope
-             * is a custom batch route.  Within the function call actions as "this.read()".  This essentially creates
-             * a client side transaction. An array can optionally be passed in to run the batch
-             * function on each item.  It still only creates a single transaction.
+             * is a custom batch route.  Within the batch function, you'd call the actions as "this.read()".
+             * This essentially creates a client side transaction. An array can optionally be passed in to
+             * run the batch function on each item.  It still only creates a single transaction.
+             * @example
+             *     route.batch(function () {
+             *         this.create(newItems);
+             *         this.remove(deletedItems);
+             *     }).then(function ()) {
+             *         ...
+             *     })
+             *     route.batch(items, function (item) {
+             *         this.setParentItem(item);
+             *         this.query().then(function (resp) {
+             *             item.childern = resp.data;
+             *         });
+             *     }).then(function () {
+             *         // handle item manipulation after children are all loaded.
+             *     });
              * @param {Object[]} [array] An array of items.
              * @param  {Function} batchFn
              * @return {Promise}
@@ -692,19 +708,29 @@ angular.module("atsid.data",[
                     array = null;
                 }
 
-                var createFakePromise = function (promise) {
+                var addPromise = function (newPromise, oldPromise) {
+                    // No need to wait on a promise if there are ones after it.
+                    if (oldPromise) {
+                        promises.splice(promises.indexOf(oldPromise), 1);
+                    }
+                    promises.push(newPromise);
+                    return newPromise;
+                };
+
+                var createFakePromise = function (promise, addedPromise) {
                         return {
                             then: function (success, error) {
-                                var p = promise.then(success, error);
-                                promises.push(p);
+                                var p = addPromise(promise.then(success, error), promise);
                                 return createFakePromise(p);
                             }
                         };
                     },
                     callMethod = function (methodName, args) {
-                        var promise = realRoute[methodName].apply(realRoute, args);
-                        promises.push(promise);
-                        return createFakePromise(promise);
+                        var promise = addPromise(realRoute[methodName].apply(realRoute, args));
+
+                        return createFakePromise(promise, function (oldPromise) {
+                            promises.splice(promises.indexOf(promise), 1);
+                        });
                     };
 
                 var fakeRoute = this.getInstance({
@@ -732,16 +758,14 @@ angular.module("atsid.data",[
                 });
 
                 if (array) {
-                    array.forEach(function (item, i) {
-                        batchFn.call(fakeRoute, item, i);
-                    });
+                    array.forEach(batchFn, fakeRoute);
                 } else {
                     batchFn.call(fakeRoute);
                 }
 
                 return $q.all(promises);
             }
-        };
+        });
 
         function DataSource (config) {
             var rootRoute = new Route(angular.extend({

@@ -4,5 +4,6 @@ bower_components
 .idea
 *.iml
 *.log
+/test/coverage/
 
 /node_modules/

@@ -1,7 +1,5 @@
 "use strict";
 
-angular.module("atsid.data.store",[
-
 /**
  * @ngdoc provider
  * @name atsid.data:httpStore
@@ -9,27 +7,7 @@ angular.module("atsid.data.store",[
  * @description
  * An HTTP based data store used by a data source.
  */
-]).provider("httpStore", ["$httpProvider", function ($httpProvider) {
-    var deleteRequests = $httpProvider.defaults.headers["delete"] = $httpProvider.defaults.headers["delete"] || {};
-    deleteRequests["Content-Type"] = "application/json;charset=utf-8";
-
-    /**
-     * Angular doesn"t understand our response object and assumes the raw data is returned rather
-     * than a response object with a status and data field.  For bulk responses we must transform the
-     * response so angular can understand it properly, as it tries to perform its own transformation internally
-     * by making each object a Resource object.
-     */
-    $httpProvider.responseInterceptors.push(["$q", function ($q) {
-        return function (promise) {
-            return promise.then(function (resp) {
-                var method = resp.config.method.toLowerCase();
-                if ((method === "post" || method === "put") && resp.data.data && angular.isArray(resp.data.data)) {
-                    resp.data = resp.data.data;
-                }
-                return resp;
-            });
-        };
-    }]);
+angular.module("atsid.data.store").provider("httpStore", [function () {
 
     // Map of default store configurations.
     var defaultConfigs = {};
@@ -45,7 +23,7 @@ angular.module("atsid.data.store",[
         defaultConfigs[config.name] = config;
     };
 
-    this.$get = ["$http", function ($http) {
+    this.$get = ["$http", "store", function ($http, store) {
 
         /**
          * @constructor
@@ -98,28 +76,22 @@ angular.module("atsid.data.store",[
             return currentObject;
         }
 
-        /**
-         * Parses the response of an http request.
-         * @param  {String} method The method of the request.
-         * @param  {Object} config the HTTPStore configuration.
-         * @param  {Object} resp   the resp of the request.
-         * @return {Object}        A dataSource compliant response object.
-         */
-        function parseResponse (method, config, resp) {
-            var respConfig = getValueAtPath("methods/" + method + "response", config) || config.response,
-                paths = respConfig.paths || {},
-                data = getValueAtPath(paths.data, resp) || resp,
-                count = angular.isArray(data) ? data.length : 1;
+        HTTPStore.prototype = store({
 
-            return {
-                data: data,
-                count: count,
-                offset: getValueAtPath(paths.offset, resp) || 0,
-                total: getValueAtPath(paths.total, resp) || count
-            };
-        }
+            /**
+             * Parses the response of an http request.
+             * @param  {String} method The method of the request.
+             * @param  {Object} config the HTTPStore configuration.
+             * @param  {Object} resp   the resp of the request.
+             * @return {Object}        A dataSource compliant response object.
+             */
+            parseResponse: function (method, config, resp) {
+                var respConfig = getValueAtPath("methods/" + method + "response", config) || config.response,
+                    paths = respConfig.paths || {},
+                    data = getValueAtPath(paths.data, resp) || resp;
 
-        HTTPStore.prototype = {
+                return this.createResponse(data, getValueAtPath(paths.offset, resp), getValueAtPath(paths.total, resp));
+            },
 
             /**
              * Builds the url for an http request.
@@ -149,13 +121,14 @@ angular.module("atsid.data.store",[
              */
             doRequest: function (method, url, query, headers, data, deferred) {
                 var config = this.config;
+                var self = this;
                 return $http({
                     method: method,
                     url: this.buildUrl(url, query),
                     data: data || '',
                     headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
-                    deferred.resolve(parseResponse(method.toLowerCase(), config, resp.data));
+                    deferred.resolve(self.parseResponse(method.toLowerCase(), config, resp.data));
                 }, function (err) {
                     deferred.reject(err);
                 });
@@ -181,7 +154,7 @@ angular.module("atsid.data.store",[
                 this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data || null, deferred);
             }
 
-        };
+        });
 
         return function (config) {
             config = angular.isString(config) ? { name: config } : config;

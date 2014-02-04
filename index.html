@@ -8,23 +8,29 @@
     </head>
     <body ng-app="masterDetailApp" style="margin:10px">
         <script src="bower_components/angular/angular.js"></script>
+        <script src="src/eventable.js"></script>
+        <script src="src/store.js"></script>
         <script src="src/httpStore.js"></script>
         <script src="src/ArrayStore.js"></script>
-        <script src="src/itemCollection.js"></script>
         <script src="src/data.js"></script>
+        <script src="src/itemCollection.js"></script>
 
         <script>
             angular.module('masterDetailApp', [
-                'atsid.data'
+                'atsid.data',
+                'atsid.data.itemCollection'
             ]).config(["dataSourceProvider", function (dataSourceProvider) {
 
                 dataSourceProvider.setStoreUrl("api");
-                dataSourceProvider.addRoutes([{
-                    path: "contacts/:contactId",
-                }, {
-					path: "contacts/:contactId/addresses/:addressId",
-					fields: "sup"
-                }]);
+                dataSourceProvider.addRoutes({
+                    contacts: {
+                        path: "contacts/:contactId",
+                    },
+					addresses: {
+                        path: "contacts/:contactId/addresses/:addressId",
+					    fields: "sup"
+                    }
+                });
 
             }])
             .controller('MasterCtrl', ['$scope', 'dataSource', "itemCollection", function ($scope, dataSource, itemCollection) {

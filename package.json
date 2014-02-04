@@ -12,10 +12,13 @@
     "grunt-contrib-connect": "~0.2.0",
     "grunt-connect-proxy": "~0.1.0",
     "grunt-usemin": "0.1.12",
+    "karma": "~0.9.4",
+    "karma-coverage": "~0.1.5",
     "grunt-karma": "~0.5.0",
     "matchdep": "~0.1.1",
     "grunt-ngmin": "~0.0.2",
-    "express": "~3.4.7"
+    "express": "~3.4.7",
+    "cucumber": "latest"
   },
   "engines": {
     "node": ">=0.8.0"

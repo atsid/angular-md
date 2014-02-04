@@ -1,6 +1,175 @@
 "use strict";
 
-angular.module("atsid.data.store",[
+angular.module("atsid.eventable", []).provider("eventable", [function () {
+
+    /**
+     * @constructor
+     *
+     * @description
+     * Adds message based eventing to objects.  Used by
+     * Item and ItemCollection.
+     */
+    function Eventable (config) {
+        angular.extend(this, config);
+    }
+
+    Eventable.prototype = {
+
+        /**
+         * Gets all the event listeners for a message.
+         * @param  {String} message The message of the event.
+         * @return {Object[]} An array of listeners.
+         */
+        _getEventListeners: function (message) {
+            var messages = this.$eventMessages = this.$eventMessages || {};
+            var listeners = messages[message];
+            if (!listeners) {
+                listeners = messages[message] = [];
+            }
+            return listeners;
+        },
+
+        hasListeners: function (message) {
+            return !!this._getEventListeners(message);
+        },
+
+        /**
+         * Emit a message.
+         * @param  {String} message The message to emit.
+         * @return {Event} The event used to send the message.
+         */
+        emit: function (message, data) {
+            var args = Array.prototype.slice.call(arguments, 1);
+            var listeners = this._getEventListeners(message);
+            var event = {
+                    message: message,
+                    data: data,
+                    preventDefault: function() {
+                        event.defaultPrevented = true;
+                    },
+                    defaultPrevented: false
+                };
+
+            args.unshift(event);
+
+            listeners.forEach(function (listener) {
+                listener.fn.apply(null, args);
+            });
+
+            return event;
+        },
+
+        /**
+         * Add an event listener for a given message.
+         * @param  {String} message The message for the listener.
+         * @param  {Function} listenerFn The function that is called to handle the event.
+         * @return {Object} The listener.  To remove, use listener.remove().
+         */
+        on: function (message, listenerFn) {
+            var listeners = this._getEventListeners(message);
+            var listener = {
+                fn: listenerFn,
+                remove: function () {
+                    var index = listeners.indexOf(this);
+                    listeners.splice(index, 1);
+                }
+            };
+
+            listeners.push(listener);
+            return listener;
+        }
+    };
+
+
+    this.$get = function () {
+        return function (config) {
+            return new Eventable(config);
+        };
+    };
+
+}]);
+"use strict";
+
+angular.module("atsid.data.store", ["atsid.eventable"]).provider("store", function () {
+
+    var errorFactory = function (name, defaultMessage) {
+        var ErrorCtr = function (message) {
+            this.name = name;
+            this.message = message || defaultMessage;
+        };
+        ErrorCtr.prototype = Error.prototype;
+
+        return ErrorCtr;
+    };
+
+    var errors = {
+        NotImlementedError: errorFactory("NotImlementedError", "Not implemented")
+    };
+
+    this.$get = ["eventable", function (eventable) {
+        var storeFactory = function (config) {
+            return eventable(angular.extend({
+
+                config: {},
+
+                read: function (url, query, data, deferred) {
+                    throw new errors.NotImlementedError();
+                },
+
+                create: function (url, query, data, deferred) {
+                    throw new errors.NotImlementedError();
+                },
+
+                update: function (url, query, data, deferred) {
+                    throw new errors.NotImlementedError();
+                },
+
+                patch: function (url, query, data, deferred) {
+                    throw new errors.NotImlementedError();
+                },
+
+                "delete": function (url, query, data, deferred) {
+                    throw new errors.NotImlementedError();
+                },
+
+                createResponse: function (data, offset, total) {
+                    var isArray = data instanceof Array;
+                    var count = isArray ? data.length : 1;
+                    return {
+                        data: data,
+                        count: count,
+                        offset: offset || 0,
+                        total: total || count
+                    };
+                },
+
+                sanitizeData: function (data) {
+                    var safeData = {};
+                    var keys = Object.keys(data);
+                    var i = keys.length;
+                    var key;
+                    while (i --> 0) {
+                        key = keys[i];
+                        if (!/^[$]/.test(keys[i])) {
+                            safeData[key] = angular.copy(data[key]);
+                        }
+                    }
+
+                    return safeData;
+                }
+
+
+            }, config));
+
+        };
+
+        storeFactory.errors = errors;
+
+        return storeFactory;
+    }];
+
+});
+"use strict";
 
 /**
  * @ngdoc provider
@@ -9,27 +178,7 @@ angular.module("atsid.data.store",[
  * @description
  * An HTTP based data store used by a data source.
  */
-]).provider("httpStore", ["$httpProvider", function ($httpProvider) {
-    var deleteRequests = $httpProvider.defaults.headers["delete"] = $httpProvider.defaults.headers["delete"] || {};
-    deleteRequests["Content-Type"] = "application/json;charset=utf-8";
-
-    /**
-     * Angular doesn"t understand our response object and assumes the raw data is returned rather
-     * than a response object with a status and data field.  For bulk responses we must transform the
-     * response so angular can understand it properly, as it tries to perform its own transformation internally
-     * by making each object a Resource object.
-     */
-    $httpProvider.responseInterceptors.push(["$q", function ($q) {
-        return function (promise) {
-            return promise.then(function (resp) {
-                var method = resp.config.method.toLowerCase();
-                if ((method === "post" || method === "put") && resp.data.data && angular.isArray(resp.data.data)) {
-                    resp.data = resp.data.data;
-                }
-                return resp;
-            });
-        };
-    }]);
+angular.module("atsid.data.store").provider("httpStore", [function () {
 
     // Map of default store configurations.
     var defaultConfigs = {};
@@ -45,7 +194,7 @@ angular.module("atsid.data.store",[
         defaultConfigs[config.name] = config;
     };
 
-    this.$get = ["$http", function ($http) {
+    this.$get = ["$http", "store", function ($http, store) {
 
         /**
          * @constructor
@@ -98,28 +247,22 @@ angular.module("atsid.data.store",[
             return currentObject;
         }
 
-        /**
-         * Parses the response of an http request.
-         * @param  {String} method The method of the request.
-         * @param  {Object} config the HTTPStore configuration.
-         * @param  {Object} resp   the resp of the request.
-         * @return {Object}        A dataSource compliant response object.
-         */
-        function parseResponse (method, config, resp) {
-            var respConfig = getValueAtPath("methods/" + method + "response", config) || config.response,
-                paths = respConfig.paths || {},
-                data = getValueAtPath(paths.data, resp) || resp,
-                count = angular.isArray(data) ? data.length : 1;
+        HTTPStore.prototype = store({
 
-            return {
-                data: data,
-                count: count,
-                offset: getValueAtPath(paths.offset, resp) || 0,
-                total: getValueAtPath(paths.total, resp) || count
-            };
-        }
+            /**
+             * Parses the response of an http request.
+             * @param  {String} method The method of the request.
+             * @param  {Object} config the HTTPStore configuration.
+             * @param  {Object} resp   the resp of the request.
+             * @return {Object}        A dataSource compliant response object.
+             */
+            parseResponse: function (method, config, resp) {
+                var respConfig = getValueAtPath("methods/" + method + "response", config) || config.response,
+                    paths = respConfig.paths || {},
+                    data = getValueAtPath(paths.data, resp) || resp;
 
-        HTTPStore.prototype = {
+                return this.createResponse(data, getValueAtPath(paths.offset, resp), getValueAtPath(paths.total, resp));
+            },
 
             /**
              * Builds the url for an http request.
@@ -149,13 +292,14 @@ angular.module("atsid.data.store",[
              */
             doRequest: function (method, url, query, headers, data, deferred) {
                 var config = this.config;
+                var self = this;
                 return $http({
                     method: method,
                     url: this.buildUrl(url, query),
                     data: data || '',
                     headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
-                    deferred.resolve(parseResponse(method.toLowerCase(), config, resp.data));
+                    deferred.resolve(self.parseResponse(method.toLowerCase(), config, resp.data));
                 }, function (err) {
                     deferred.reject(err);
                 });
@@ -181,7 +325,7 @@ angular.module("atsid.data.store",[
                 this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data || null, deferred);
             }
 
-        };
+        });
 
         return function (config) {
             config = angular.isString(config) ? { name: config } : config;
@@ -194,7 +338,7 @@ angular.module("atsid.data.store",[
 
 angular.module("atsid.data.store").provider("arrayStore", [function () {
 
-    this.$get = [function () {
+    this.$get = ["store", function (store) {
 
         /**
          * @constructor
@@ -206,134 +350,180 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
             this.array = angular.isArray(config) ? config : config.array || [];
             this.idProperty = config.idProperty || "id";
             this.idToItems = {};
+            this.sanitize = config.hasOwnProperty("sanitize") ? config.sanitize : true;
             if (config.getId) {
                 this.getId = config.getId;
             }
             this.uid = 0;
+
+            if (this.array.length) {
+                this.array.splice(0, this.array.length).forEach(function (item) {
+                    this._addItem(item);
+                }, this);
+            }
         }
 
-        ArrayStore.prototype = {
+        ArrayStore.prototype = store({
+
+            _addItem: function (item, replace) {
+                var idProperty = this.idProperty;
+                if (!item[idProperty]) {
+                    item[idProperty] = this.getId();
+                }
+                if (this.idToItems[item[idProperty]]) {
+                    if (replace) {
+                        var index = this.array.indexOf(item);
+                        this.array.splice(index, 1);
+                    } else {
+                        return;
+                    }
+                }
+
+                if (this.sanitize) {
+                    item = this.sanitizeData(item);
+                }
+                this.idToItems[item[idProperty]] = item;
+                this.array.push(item);
+
+                return this.sanitize ? angular.copy(item) : item;
+            },
 
             getId: function () {
-                this.uid += 1;
+                do { this.uid += 1; } while (this.idToItems[this.uid]);
                 return this.uid;
             },
 
             findItem: function (path) {
-                return this.idToItems[path];
+                var item = this.idToItems[path];
+                if (item && this.sanitize) {
+                    item = angular.copy(item);
+                }
+                return item;
+            },
+
+            hasItem: function (item) {
+                if (angular.isArray(item)) {
+                    return item.every(function (i) {
+                        return this.hasItem(i);
+                    }, this);
+                } else if (item[this.idProperty]) {
+                    return !!this.idToItems[item[this.idProperty]];
+                }
+                return !!this.idToItems[item];
             },
 
             syncRead: function (path, params) {
-                return this.findItem(path);
+                var item = path !== undefined && path !== null ? this.findItem(path) : angular.copy(this.array);
+                if (item) {
+                    return this.createResponse(item);
+                }
             },
 
             syncCreate: function (path, params, item) {
                 var idProperty = this.idProperty;
 
                 if (angular.isArray(item)) {
-                    return item.map(function (item) {
-                        return this.syncCreate(item);
-                    }, this);
+                    return this.createResponse(item.map(function (item) {
+                        return this._addItem(item);
+                    }, this));
                 }
-                if (!item[idProperty]) {
-                    item[idProperty] = this.getId();
-                }
-                if (!this.idToItems[idProperty]) {
-                    this.array.push(item);
-                    this.idToItems[item[idProperty]] = item;
-                    return item;
-                }
+                return this.createResponse(this._addItem(item));
             },
 
             syncUpdate: function (path, params, changedItem) {
                 if (angular.isArray(changedItem)) {
-                    return changedItem.map(function (item) {
-                        return this.syncUpdate(item);
-                    }, this);
-                }
-                var item = this.findItem(path);
-                if (item) {
-                    var index = this.array.indexOf(item);
-                    this.array.splice(index, 1, changedItem);
-                    delete this.idToItems[path];
-                    this.idToItems[item[this.idProperty]] = item;
-                    return changedItem;
+                    if (this.hasItem(changedItem)) {
+                        return this.createResponse(changedItem.map(function (item) {
+                            return this._addItem(item, true);
+                        }, this));
+                    }
+                } else {
+                    if (this.hasItem(path)) {
+                        return this.createResponse(this._addItem(changedItem, true));
+                    }
                 }
             },
 
             syncPatch: function (path, params, changedItem) {
                 if (angular.isArray(changedItem)) {
-                    return changedItem.map(function (item) {
-                        return this.syncPatch(item);
-                    }, this);
-                }
-                var item = this.findItem(path);
-                if (item) {
-                    angular.extend(item, changedItem);
-                    return item;
-                }
-            },
-
-            syncDelete: function (path, params, item) {
-                if (angular.isArray(item)) {
-                    return item.map(function (item) {
-                        return this.syncDelete(item);
-                    }, this);
-                }
-                item = this.findItem(path);
-                if (item) {
-                    var index = this.array.indexOf(item);
-                    this.array.splice(index, 1);
-                    delete this.idToItems[item[this.idProperty]];
-                    return item;
-                }
-            },
-
-            read: function (path, params, deferred) {
-                var item = this.syncRead(path, params);
-                if (item) {
-                    deferred.resolve(angular.copy(item));
+                    if (this.hasItem(changedItem)) {
+                        return this.createResponse(changedItem.map(function (changedItem) {
+                            var item = this.findItem(changedItem[this.idProperty]);
+                            angular.extend(item, changedItem);
+                            return this._addItem(item, true);
+                        }, this));
+                    }
                 } else {
-                    deferred.resolve(new Error ("No item at path " + path));
+                    var item = this.findItem(path);
+                    if (item) {
+                        angular.extend(item, changedItem);
+                        return this.createResponse(this._addItem(item, true));
+                    }
+                }
+            },
+
+            syncDelete: function (path, params, items) {
+                if (items) {
+                    if (this.hasItem(items)) {
+                        items.forEach(function (item) {
+                            item = this.idToItems[item[this.idProperty]];
+                            var index = this.array.indexOf(item);
+                            this.array.splice(index, 1);
+                            delete this.idToItems[item[this.idProperty]];
+                        }, this);
+                        return this.createResponse(null);
+                    }
+                } else {
+                    var item = {};
+                    item[this.idProperty] = path;
+                    return this.syncDelete(null, params, [item]);
+                }
+            },
+
+            read: function (path, params, data, deferred) {
+                var resp = this.syncRead(path, params);
+                if (resp) {
+                    deferred.resolve(resp);
+                } else {
+                    deferred.reject(new Error ("No item at path " + path));
                 }
             },
 
             create: function (path, params, data, deferred) {
-                var item = this.syncCreate(path, params, data);
-                deferred.resolve(item);
+                var resp = this.syncCreate(path, params, data);
+                deferred.resolve(resp);
             },
 
             update: function (path, params, data, deferred) {
-                var item = this.syncUpdate(path, params, data);
-                if (item) {
-                    deferred.resolve(angular.copy(item));
+                var resp = this.syncUpdate(path, params, data);
+                if (resp) {
+                    deferred.resolve(resp);
                 } else {
-                    deferred.resolve(new Error ("No item at path " + path));
+                    deferred.reject(new Error ("No item at path " + path));
                 }
             },
 
             patch: function (path, params, data, deferred) {
-                var item = this.syncPath(path, params, data);
-                if (item) {
-                    deferred.resolve(angular.copy(item));
+                var resp = this.syncPatch(path, params, data);
+                if (resp) {
+                    deferred.resolve(resp);
                 } else {
-                    deferred.resolve(new Error ("No item at path " + path));
+                    deferred.reject(new Error ("No item at path " + path));
                 }
             },
 
             "delete": function (path, params, data, deferred) {
-                var item = this.syncDelete(path, params, data);
-                if (item) {
-                    deferred.resolve({});
+                var resp = this.syncDelete(path, params, data);
+                if (resp) {
+                    deferred.resolve(resp);
                 } else {
-                    deferred.resolve(new Error ("No item at path " + path));
+                    deferred.reject(new Error ("No item at path " + path));
                 }
             }
 
-        };
+        });
 
         return function (config) {
-            config = angular.isString(config) ? { name: config } : config;
             return new ArrayStore(config);
         };
 
@@ -349,6 +539,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
  * Represents a data source.
  */
 angular.module("atsid.data",[
+    "atsid.eventable",
     "atsid.data.store"
 ]).provider("dataSource", [function () {
 
@@ -446,7 +637,7 @@ angular.module("atsid.data",[
     var globalConfig = {};
     angular.extend(this, dataSourceConfigurationFactory(globalConfig));
 
-    this.$get = ["$q", "httpStore", "arrayStore", function ($q, httpStore, arrayStore) {
+    this.$get = ["$q", "httpStore", "arrayStore", "eventable", function ($q, httpStore, arrayStore, eventable) {
 
         /**
          * Gets a data store based on a configuration.
@@ -616,7 +807,7 @@ angular.module("atsid.data",[
             route._self = route;
             return route;
         }
-        Route.prototype = {
+        Route.prototype = eventable({
 
             /**
              * Add a new route.  This will add a permanent child route with
@@ -1017,9 +1208,24 @@ angular.module("atsid.data",[
             /**
              * Perform a batch of operations without dealing with promise management.
              * A function is passed in, with the route as a parameter.  The batchFn's scope
-             * is a custom batch route.  Within the function call actions as "this.read()".  This essentially creates
-             * a client side transaction. An array can optionally be passed in to run the batch
-             * function on each item.  It still only creates a single transaction.
+             * is a custom batch route.  Within the batch function, you'd call the actions as "this.read()".
+             * This essentially creates a client side transaction. An array can optionally be passed in to
+             * run the batch function on each item.  It still only creates a single transaction.
+             * @example
+             *     route.batch(function () {
+             *         this.create(newItems);
+             *         this.remove(deletedItems);
+             *     }).then(function ()) {
+             *         ...
+             *     })
+             *     route.batch(items, function (item) {
+             *         this.setParentItem(item);
+             *         this.query().then(function (resp) {
+             *             item.childern = resp.data;
+             *         });
+             *     }).then(function () {
+             *         // handle item manipulation after children are all loaded.
+             *     });
              * @param {Object[]} [array] An array of items.
              * @param  {Function} batchFn
              * @return {Promise}
@@ -1033,19 +1239,29 @@ angular.module("atsid.data",[
                     array = null;
                 }
 
-                var createFakePromise = function (promise) {
+                var addPromise = function (newPromise, oldPromise) {
+                    // No need to wait on a promise if there are ones after it.
+                    if (oldPromise) {
+                        promises.splice(promises.indexOf(oldPromise), 1);
+                    }
+                    promises.push(newPromise);
+                    return newPromise;
+                };
+
+                var createFakePromise = function (promise, addedPromise) {
                         return {
                             then: function (success, error) {
-                                var p = promise.then(success, error);
-                                promises.push(p);
+                                var p = addPromise(promise.then(success, error), promise);
                                 return createFakePromise(p);
                             }
                         };
                     },
                     callMethod = function (methodName, args) {
-                        var promise = realRoute[methodName].apply(realRoute, args);
-                        promises.push(promise);
-                        return createFakePromise(promise);
+                        var promise = addPromise(realRoute[methodName].apply(realRoute, args));
+
+                        return createFakePromise(promise, function (oldPromise) {
+                            promises.splice(promises.indexOf(promise), 1);
+                        });
                     };
 
                 var fakeRoute = this.getInstance({
@@ -1073,16 +1289,14 @@ angular.module("atsid.data",[
                 });
 
                 if (array) {
-                    array.forEach(function (item, i) {
-                        batchFn.call(fakeRoute, item, i);
-                    });
+                    array.forEach(batchFn, fakeRoute);
                 } else {
                     batchFn.call(fakeRoute);
                 }
 
                 return $q.all(promises);
             }
-        };
+        });
 
         function DataSource (config) {
             var rootRoute = new Route(angular.extend({
@@ -1109,86 +1323,12 @@ angular.module("atsid.data",[
     }];
 
 }]);
-angular.module("atsid.data.item", [
+angular.module("atsid.data.itemCollection", [
+    "atsid.eventable",
     "atsid.data"
 ]).provider("itemCollection", [function () {
 
-    this.$get = ["dataSource", "arrayStore", "$q", "$timeout", function (dataSource, arrayStore, $q, $timeout) {
-
-        /**
-         * @constructor
-         *
-         * @description
-         * Adds message based eventing to objects.  Used by
-         * Item and ItemCollection.
-         */
-        function Eventer () {}
-        Eventer.prototype = {
-
-            /**
-             * Gets all the event handlers for a message.
-             * @param  {String} message The message of the event.
-             * @return {Object[]} An array of handlers.
-             */
-            getEventHandlers: function (message) {
-                var eventHandlers = this.$eventHandlers = this.$eventHandlers || {};
-                var handlers = eventHandlers[message];
-                if (!handlers) {
-                    handlers = eventHandlers[message] = [];
-                }
-                return handlers;
-            },
-
-            /**
-             * Emit a message.
-             * @param  {String} message The message to emit.
-             * @return {Event} The event used to send the message.
-             */
-            emit: function (message) {
-                var args = Array.prototype.slice.call(arguments, 1);
-                var handlers = this.getEventHandlers(message);
-                var event = {
-                        message: message,
-                        collection: this,
-                        preventDefault: function() {
-                            event.defaultPrevented = true;
-                        },
-                        defaultPrevented: false
-                    };
-
-                args.unshift(event);
-
-                if (handlers) {
-                    handlers.forEach(function (handler) {
-                        handler.fn.apply(null, args);
-                    });
-                }
-
-                return event;
-            },
-
-            /**
-             * Add a handler for a given message.
-             * @param  {String} message The message for the handler.
-             * @param  {Function} handlerFn The function that is called to handle the event.
-             * @return {Object} The handler.  To remove, use handler.remove().
-             */
-            on: function (message, handlerFn) {
-                var handlers = this.getEventHandlers(message);
-                var handler = {
-                    fn: handlerFn,
-                    remove: function () {
-                        var index = handlers.indexOf(this);
-                        if (index != -1) {
-                            handlers.splice(index, 1);
-                        }
-                    }
-                };
-
-                handlers.push(handler);
-                return handler;
-            }
-        };
+    this.$get = ["dataSource", "arrayStore", "eventable", "$q", "$timeout", function (dataSource, arrayStore, eventable, $q, $timeout) {
 
         /**
          * @constructor
@@ -1222,7 +1362,7 @@ angular.module("atsid.data.item", [
 
             this.setData(itemData);
         }
-        Item.prototype = angular.extend(new Eventer(), {
+        Item.prototype = angular.extend(eventable(), {
 
             /**
              * Gets a flat copy of the item's data that is usable with
@@ -1408,7 +1548,7 @@ angular.module("atsid.data.item", [
             }
         }
 
-        ItemCollection.prototype = angular.extend(new Eventer(), {
+        ItemCollection.prototype = angular.extend(eventable(), {
 
             /**
              * Gets the ItemCollection's data source.
@@ -1428,7 +1568,8 @@ angular.module("atsid.data.item", [
                 oldItemDataList = oldItemDataList || [];
                 return itemDataList.map(function (itemData, i) {
                     var itemId = (oldItemDataList[i] && oldItemDataList[i][this.idProperty]) || itemData[this.idProperty];
-                    var item = this.itemStore.syncRead(itemId);
+                    var resp = this.itemStore.syncRead(itemId);
+                    var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
                     } else {
@@ -1470,7 +1611,7 @@ angular.module("atsid.data.item", [
              */
             addItem: function (itemData) {
                 var item = itemData.isIn && itemData.isIn(this) && !itemData.isDeleted() && itemData;
-                return this.itemStore.syncCreate("", null, item || this.createItem(itemData));
+                return this.itemStore.syncCreate("", null, item || this.createItem(itemData)).data;
             },
 
             /**
@@ -1491,6 +1632,7 @@ angular.module("atsid.data.item", [
                 this.items = [];
                 this.deletedItems = [];
                 var itemStore = this.itemStore = arrayStore({
+                    sanitize: false,
                     array: this.items,
                     getId: function () {
                         if (!this.fakeUid) {

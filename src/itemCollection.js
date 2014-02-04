@@ -1,83 +1,9 @@
-angular.module("atsid.data.item", [
+angular.module("atsid.data.itemCollection", [
+    "atsid.eventable",
     "atsid.data"
 ]).provider("itemCollection", [function () {
 
-    this.$get = ["dataSource", "arrayStore", "$q", "$timeout", function (dataSource, arrayStore, $q, $timeout) {
-
-        /**
-         * @constructor
-         *
-         * @description
-         * Adds message based eventing to objects.  Used by
-         * Item and ItemCollection.
-         */
-        function Eventer () {}
-        Eventer.prototype = {
-
-            /**
-             * Gets all the event handlers for a message.
-             * @param  {String} message The message of the event.
-             * @return {Object[]} An array of handlers.
-             */
-            getEventHandlers: function (message) {
-                var eventHandlers = this.$eventHandlers = this.$eventHandlers || {};
-                var handlers = eventHandlers[message];
-                if (!handlers) {
-                    handlers = eventHandlers[message] = [];
-                }
-                return handlers;
-            },
-
-            /**
-             * Emit a message.
-             * @param  {String} message The message to emit.
-             * @return {Event} The event used to send the message.
-             */
-            emit: function (message) {
-                var args = Array.prototype.slice.call(arguments, 1);
-                var handlers = this.getEventHandlers(message);
-                var event = {
-                        message: message,
-                        collection: this,
-                        preventDefault: function() {
-                            event.defaultPrevented = true;
-                        },
-                        defaultPrevented: false
-                    };
-
-                args.unshift(event);
-
-                if (handlers) {
-                    handlers.forEach(function (handler) {
-                        handler.fn.apply(null, args);
-                    });
-                }
-
-                return event;
-            },
-
-            /**
-             * Add a handler for a given message.
-             * @param  {String} message The message for the handler.
-             * @param  {Function} handlerFn The function that is called to handle the event.
-             * @return {Object} The handler.  To remove, use handler.remove().
-             */
-            on: function (message, handlerFn) {
-                var handlers = this.getEventHandlers(message);
-                var handler = {
-                    fn: handlerFn,
-                    remove: function () {
-                        var index = handlers.indexOf(this);
-                        if (index != -1) {
-                            handlers.splice(index, 1);
-                        }
-                    }
-                };
-
-                handlers.push(handler);
-                return handler;
-            }
-        };
+    this.$get = ["dataSource", "arrayStore", "eventable", "$q", "$timeout", function (dataSource, arrayStore, eventable, $q, $timeout) {
 
         /**
          * @constructor
@@ -111,7 +37,7 @@ angular.module("atsid.data.item", [
 
             this.setData(itemData);
         }
-        Item.prototype = angular.extend(new Eventer(), {
+        Item.prototype = angular.extend(eventable(), {
 
             /**
              * Gets a flat copy of the item's data that is usable with
@@ -297,7 +223,7 @@ angular.module("atsid.data.item", [
             }
         }
 
-        ItemCollection.prototype = angular.extend(new Eventer(), {
+        ItemCollection.prototype = angular.extend(eventable(), {
 
             /**
              * Gets the ItemCollection's data source.
@@ -317,7 +243,8 @@ angular.module("atsid.data.item", [
                 oldItemDataList = oldItemDataList || [];
                 return itemDataList.map(function (itemData, i) {
                     var itemId = (oldItemDataList[i] && oldItemDataList[i][this.idProperty]) || itemData[this.idProperty];
-                    var item = this.itemStore.syncRead(itemId);
+                    var resp = this.itemStore.syncRead(itemId);
+                    var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
                     } else {
@@ -359,7 +286,7 @@ angular.module("atsid.data.item", [
              */
             addItem: function (itemData) {
                 var item = itemData.isIn && itemData.isIn(this) && !itemData.isDeleted() && itemData;
-                return this.itemStore.syncCreate("", null, item || this.createItem(itemData));
+                return this.itemStore.syncCreate("", null, item || this.createItem(itemData)).data;
             },
 
             /**
@@ -380,6 +307,7 @@ angular.module("atsid.data.item", [
                 this.items = [];
                 this.deletedItems = [];
                 var itemStore = this.itemStore = arrayStore({
+                    sanitize: false,
                     array: this.items,
                     getId: function () {
                         if (!this.fakeUid) {
