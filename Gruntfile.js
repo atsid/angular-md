@@ -110,11 +110,13 @@ module.exports = function (grunt) {
 				configFile : 'karma.unit.conf.js',
 				singleRun : true
 			}
-            // cucumber : {
-            //     configFile : 'karma.cucumber.conf.js',
-            //     singleRun : true
-            // }
 		},
+        cucumberjs: {
+            src: "test/features",
+            options: {
+                format: "pretty"
+            }
+        },
 		concat : {
             options: {
 
@@ -167,6 +169,11 @@ module.exports = function (grunt) {
 	grunt.registerTask('test', [
         'clean:server',
         'karma:unit'
+    ]);
+
+    grunt.registerTask('acceptance', [
+        'clean:server',
+        'cucumberjs'
     ]);
 
 	grunt.registerTask('build', [
