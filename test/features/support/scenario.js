@@ -10,18 +10,13 @@ var spawnOptions = {
 var serverOptions = [
 
 ];
-var driverOptions = {
-    desiredCapabilities: {
-        browserName: "chrome"
-    }
-};
 var serverAddress = "http://localhost:4444/wd/hub";
 
 module.exports = function (scenarioFn) {
 
     return function () {
         var server = selenium(spawnOptions, serverOptions);
-        var driver = new protractor.Builder().usingServer(serverAddress).withCapabilities(protractor.Capabilities.firefox()).build();
+        var driver = new protractor.Builder().usingServer(serverAddress).withCapabilities(protractor.Capabilities.chrome()).build();
         var browser = protractor.wrapDriver(driver);
         _.extend(this, scenarioFn);
 

@@ -9,11 +9,10 @@ module.exports = scenario(function (browser, element, by) {
     });
 
     this.When(/^I select the first contact in the list$/, function(next) {
-        element.all(by.repeater("contact in contacts.getAll()")).then(function (rows) {
-            var firstRow = rows[0].findElement(by.tagName("a"));
-            firstRow.getText().then(function (text) {
+        element.all(by.repeater("contact in contacts.getAll()")).first().findElement(by.tagName("a")).then(function (anchor) {
+            anchor.getText().then(function (text) {
                 contactName = text;
-                firstRow.click().then(next);
+                anchor.click().then(next);
             });
         });
     });

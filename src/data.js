@@ -583,7 +583,7 @@ angular.module("atsid.data",[
                         });
                     });
 
-                    self.store[method](path, queryParams, item, deferred);
+                    self.store[method](path || null, queryParams, item, deferred);
                 }, function (err) {
                     requestDeferred.reject(err);
                 });
