@@ -581,6 +581,8 @@ angular.module("atsid.data",[
                         }, function (err) {
                             requestDeferred.reject(err);
                         });
+                    }, function (err) {
+                        requestDeferred.reject(err);
                     });
 
                     self.store[method](path || null, queryParams, item, deferred);
