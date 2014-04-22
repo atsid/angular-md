@@ -880,7 +880,7 @@ angular.module("atsid.data",[
                             return false;
                         }
                     }
-                    route = currentRoute;
+                    currentRoute = route;
                     return true;
                 });
                 return currentRoute;
