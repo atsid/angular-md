@@ -109,30 +109,31 @@ angular.module("atsid.data.store", ["atsid.namedError", "atsid.eventable"]).prov
 
     this.$get = ["namedError", "eventable", function (namedError, eventable) {
         var errors = {
-            NotImlementedError: namedError("NotImlementedError", "Not implemented")
+            NotImlementedError: namedError("NotImlementedError", "Not implemented"),
+            NotFoundError: namedError("NotFoundError", "Not Found")
         };
         var storeFactory = function (config) {
             return eventable(angular.extend({
 
                 config: {},
 
-                read: function (url, query, data, deferred) {
+                read: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                create: function (url, query, data, deferred) {
+                create: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                update: function (url, query, data, deferred) {
+                update: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                patch: function (url, query, data, deferred) {
+                patch: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                "delete": function (url, query, data, deferred) {
+                "delete": function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
@@ -303,30 +304,28 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
                     data: data || '',
                     headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
-                    deferred.resolve(self.parseResponse(method.toLowerCase(), config, resp.data));
-                }, function (err) {
-                    deferred.reject(err);
+                    return self.parseResponse(method.toLowerCase(), config, resp.data);
                 });
             },
 
-            read: function (url, query, data, deferred) {
-                this.doRequest("GET", url, query, {}, data, deferred);
+            read: function (url, query, data) {
+                return this.doRequest("GET", url, query, {}, data);
             },
 
-            create: function (url, query, data, deferred) {
-                this.doRequest("POST", url, query, {}, data, deferred);
+            create: function (url, query, data) {
+                return this.doRequest("POST", url, query, {}, data);
             },
 
-            update: function (url, query, data, deferred) {
-                this.doRequest("PUT", url, query, {}, data, deferred);
+            update: function (url, query, data) {
+                return this.doRequest("PUT", url, query, {}, data);
             },
 
-            patch: function (url, query, data, deferred) {
-                this.doRequest("PATCH", url, query, {}, data, deferred);
+            patch: function (url, query, data) {
+                return this.doRequest("PATCH", url, query, {}, data);
             },
 
-            "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data, deferred);
+            "delete": function (url, query, data) {
+                return this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data);
             }
 
         });
@@ -342,8 +341,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
 
 angular.module("atsid.data.store").provider("arrayStore", [function () {
 
-    this.$get = ["store", function (store) {
-
+    this.$get = ["store", "namedError", function (store) {
         /**
          * @constructor
          * The constructor for a new Array store.
@@ -351,7 +349,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
          */
         function ArrayStore (config) {
             config = config || {};
-            this.array = angular.isArray(config) ? config : config.array || [];
+            this.array = [];
             this.idProperty = config.idProperty || "id";
             this.idToItems = {};
             this.sanitize = config.hasOwnProperty("sanitize") ? config.sanitize : true;
@@ -359,12 +357,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 this.getId = config.getId;
             }
             this.uid = 0;
-
-            if (this.array.length) {
-                this.array.splice(0, this.array.length).forEach(function (item) {
-                    this._addItem(item);
-                }, this);
-            }
+            this.setItems(angular.isArray(config) ? config : config.array || []);
         }
 
         ArrayStore.prototype = store({
@@ -397,6 +390,15 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 return this.uid;
             },
 
+            setItems: function (items) {
+                this.array.splice(0, this.array.length);
+                this.idToItems = {};
+                this.uid = 0;
+                items.forEach(function (item) {
+                    this._addItem(item);
+                }, this);
+            },
+
             findItem: function (path) {
                 var item = this.idToItems[path];
                 if (item && this.sanitize) {
@@ -416,42 +418,42 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 return !!this.idToItems[item];
             },
 
-            syncRead: function (path, params) {
+            read: function (path, params, data) {
                 var item = path !== undefined && path !== null ? this.findItem(path) : angular.copy(this.array);
                 if (item) {
                     return this.createResponse(item);
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncCreate: function (path, params, item) {
+            create: function (path, params, data) {
                 var idProperty = this.idProperty;
 
-                if (angular.isArray(item)) {
-                    return this.createResponse(item.map(function (item) {
+                if (angular.isArray(data)) {
+                    return this.createResponse(data.map(function (item) {
                         return this._addItem(item);
                     }, this));
                 }
-                return this.createResponse(this._addItem(item));
+                return this.createResponse(this._addItem(data));
             },
 
-            syncUpdate: function (path, params, changedItem) {
-                if (angular.isArray(changedItem)) {
-                    if (this.hasItem(changedItem)) {
-                        return this.createResponse(changedItem.map(function (item) {
+            update: function (path, params, data) {
+                if (angular.isArray(data)) {
+                    if (this.hasItem(data)) {
+                        return this.createResponse(data.map(function (item) {
                             return this._addItem(item, true);
                         }, this));
                     }
-                } else {
-                    if (this.hasItem(path)) {
-                        return this.createResponse(this._addItem(changedItem, true));
-                    }
+                } else if (this.hasItem(path)) {
+                    return this.createResponse(this._addItem(data, true));
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncPatch: function (path, params, changedItem) {
-                if (angular.isArray(changedItem)) {
-                    if (this.hasItem(changedItem)) {
-                        return this.createResponse(changedItem.map(function (changedItem) {
+            patch: function (path, params, data) {
+                if (angular.isArray(data)) {
+                    if (this.hasItem(data)) {
+                        return this.createResponse(data.map(function (changedItem) {
                             var item = this.findItem(changedItem[this.idProperty]);
                             angular.extend(item, changedItem);
                             return this._addItem(item, true);
@@ -460,16 +462,17 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 } else {
                     var item = this.findItem(path);
                     if (item) {
-                        angular.extend(item, changedItem);
+                        angular.extend(item, data);
                         return this.createResponse(this._addItem(item, true));
                     }
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncDelete: function (path, params, items) {
-                if (items) {
-                    if (this.hasItem(items)) {
-                        items.forEach(function (item) {
+            delete: function (path, params, data) {
+                if (data) {
+                    if (this.hasItem(data)) {
+                        data.forEach(function (item) {
                             item = this.idToItems[item[this.idProperty]];
                             var index = this.array.indexOf(item);
                             this.array.splice(index, 1);
@@ -477,51 +480,11 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                         }, this);
                         return this.createResponse(null);
                     }
+                    return new store.errors.NotFoundError("No item at path " + path);
                 } else {
                     var item = {};
                     item[this.idProperty] = path;
-                    return this.syncDelete(null, params, [item]);
-                }
-            },
-
-            read: function (path, params, data, deferred) {
-                var resp = this.syncRead(path, params);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            create: function (path, params, data, deferred) {
-                var resp = this.syncCreate(path, params, data);
-                deferred.resolve(resp);
-            },
-
-            update: function (path, params, data, deferred) {
-                var resp = this.syncUpdate(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            patch: function (path, params, data, deferred) {
-                var resp = this.syncPatch(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            "delete": function (path, params, data, deferred) {
-                var resp = this.syncDelete(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
+                    return this.delete(null, params, [item]);
                 }
             }
 
@@ -838,7 +801,7 @@ angular.module("atsid.data",[
                 if (!routeConfig.name && !routeConfig.path) {
                     throw new Error("Cannot create route without a name or path.");
                 }
-                var route = this.nameToRoute[routeConfig.name] || this.getRouteByPath(routeConfig.path || routeConfig.name);
+                var route = this._getRouteByNameOrPath(routeConfig.path || routeConfig.name);
                 if (!route) {
                     if(this.allowAutomaticRoutes) {
                         route = new Route(routeConfig, this);
@@ -847,6 +810,10 @@ angular.module("atsid.data",[
                     }
                 }
                 return route.getInstance(routeConfig);
+            },
+
+            _getRouteByNameOrPath: function (name) {
+                return this.nameToRoute[name] || this.getRouteByPath(name);
             },
 
             /**
@@ -918,6 +885,7 @@ angular.module("atsid.data",[
                 if (parent) {
                     parent.setItem(item);
                 }
+                this.emit('parentItemChanged', item);
             },
 
             /**
@@ -950,6 +918,7 @@ angular.module("atsid.data",[
 
             setItem: function (item) {
                 this.currentItem = item;
+                this.emit('itemChanged', item);
             },
 
             /**
@@ -1027,7 +996,7 @@ angular.module("atsid.data",[
              * Is the route instance the same as another.
              * @param {Route} otherDataSource Route to compare to.
              */
-            isSame: function (otherDataSource) {
+            isEqual: function (otherDataSource) {
                 return otherDataSource._self === this._self;
             },
 
@@ -1040,7 +1009,8 @@ angular.module("atsid.data",[
              */
             runTransformers: function (type, newItems, oldItems) {
                 var tMap = this.transformerMap;
-                var deferred = $q.defer();
+                var items = newItems;
+
                 if (!tMap) {
                     tMap = this.transformerMap = {};
                     (this.transformers || []).forEach(function (transformer) {
@@ -1051,32 +1021,16 @@ angular.module("atsid.data",[
 
                 var tList = tMap[type];
                 if (tList && newItems) {
-                    var nextTransform = function (i, items) {
-                        var tDeferred = $q.defer();
-                        var transformer = tList[i];
-                        if (transformer) {
-                            if (oldItems !== undefined) {
-                                transformer.transform(items, oldItems, tDeferred);
-                            } else {
-                                transformer.transform(items, tDeferred);
-                            }
-                            tDeferred.promise.then(function (items) {
-                                nextTransform(i + 1, items);
-                            }, function (err) {
-                                deferred.reject(err);
-                            });
-                        } else {
-                            deferred.resolve(items);
-                        }
-                    };
-
-                    nextTransform(0, newItems);
-
-                } else {
-                    deferred.resolve(newItems);
+                    tList.forEach(function (transformer) {
+                        items = transformer.transform(items, oldItems);
+                    });
                 }
 
-                return deferred.promise;
+                return items;
+            },
+
+            hasTransformers: function (transformerType) {
+                return this.transformerMap && this.transformerMap[transformerType];
             },
 
             /**
@@ -1087,8 +1041,7 @@ angular.module("atsid.data",[
              * @return {Object} A promise to handle the response.
              */
             doRequest: function (method, params, item) {
-                var requestDeferred = $q.defer();
-                var promise = requestDeferred.promise;
+                var deferred = $q.defer();
                 var isArray = angular.isArray(item);
                 var oldItems = !item || isArray ? item : [item];
                 var self = this;
@@ -1097,34 +1050,59 @@ angular.module("atsid.data",[
                 var path = this.getPath(params);
                 var queryParams = this.getStoreParams(params);
 
-                this.runTransformers("request", oldItems).then(function (transformedItem) {
-                    var deferred = $q.defer();
-                    if (transformedItem && !isArray) {
-                        transformedItem = transformedItem[0];
+                if (this.hasTransformers("request")) {
+                    item = this.runTransformers("request", oldItems);
+                    if (item && !isArray) {
+                        item = item[0];
+                    }
+                }
+
+                this.emit("request", {
+                    method: method,
+                    path: path,
+                    params: queryParams,
+                    data: item
+                });
+
+                var result = this.store[method](path || null, queryParams, item);
+                if (result.then) {
+                    result.then(function (resp) {
+                        deferred.resolve(resp);
+                    }, function (err) {
+                        deferred.reject(err);
+                    });
+                } else if (result instanceof Error) {
+                    deferred.reject(result);
+                } else {
+                    deferred.resolve(result);
+                }
+
+                return deferred.promise.then(function (resp) {
+                    var isArray = angular.isArray(resp.data);
+                    var newItems = !resp.data || isArray ? resp.data : [resp.data];
+
+                    if (self.hasTransformers("response")) {
+                        newItems = self.runTransformers("response", newItems, oldItems || []);
+                        if (newItems && !isArray) {
+                            newItems = newItems[0];
+                        }
+                        resp.data = newItems;
                     }
 
-                    deferred.promise.then(function (resp) {
-                        var isArray = angular.isArray(resp.data);
-                        var newItems = !resp.data || isArray ? resp.data : [resp.data];
-
-                        self.runTransformers("response", newItems, oldItems || []).then(function (item) {
-                            if (!isArray) {
-                                item = item[0];
-                            }
-                            resp.data = item;
-                            requestDeferred.resolve(resp);
-                        }, function (err) {
-                            requestDeferred.reject(err);
-                        });
-                    }, function (err) {
-                        requestDeferred.reject(err);
+                    self.emit("response", {
+                        method: method,
+                        path: path,
+                        params: queryParams,
+                        data: newItems
                     });
 
-                    self.store[method](path || null, queryParams, item, deferred);
+                    return resp;
+
                 }, function (err) {
-                    requestDeferred.reject(err);
+                    self.emit("error", err);
+                    return err;
                 });
-                return promise;
+
             },
 
             /**
@@ -1320,8 +1298,11 @@ angular.module("atsid.data",[
         dataSource.createDataSource = function (configFunc) {
             var config = {};
             var configObj = dataSourceConfigurationFactory(config);
-
-            configFunc.call(configObj, configObj);
+            if (angular.isFunction(configFunc)) {
+                configFunc.call(configObj, configObj);
+            } else if (angular.isObject(configFunc)) {
+                configObj.setDefaults(configFunc);
+            }
             return new DataSource(config);
         };
 

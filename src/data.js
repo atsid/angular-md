@@ -248,7 +248,7 @@ angular.module("atsid.data",[
             // Things that must be inherited
             if (!parentRoute) {
                 if (config.store) {
-                    route.store = config.store;
+                    route.setStore(config.store);
                 }
                 route.nameToRoute = {};
                 route.allowAutomaticRoutes = config.allowAutomaticRoutes;
@@ -278,6 +278,21 @@ angular.module("atsid.data",[
         }
         Route.prototype = eventable({
 
+            setStore: function (store) {
+                var currentStore = this.store;
+                if (currentStore) {
+                    this.storeListeners.forEach(function (storeListener) {
+                        storeListener.remove();
+                    });
+                }
+                this.storeListener = [
+                    store.on("message", function (e, message) {
+                        var args = Array.prototype.slice.call(arguments, 1);
+                        this.emit.apply(this, args);
+                    })
+                ];
+            },
+
             /**
              * Add a new route.  This will add a permanent child route with
              * the configuration set as the default.
@@ -303,7 +318,7 @@ angular.module("atsid.data",[
                 if (!routeConfig.name && !routeConfig.path) {
                     throw new Error("Cannot create route without a name or path.");
                 }
-                var route = this.nameToRoute[routeConfig.name] || this.getRouteByPath(routeConfig.path || routeConfig.name);
+                var route = this._getRouteByNameOrPath(routeConfig.path || routeConfig.name);
                 if (!route) {
                     if(this.allowAutomaticRoutes) {
                         route = new Route(routeConfig, this);
@@ -312,6 +327,10 @@ angular.module("atsid.data",[
                     }
                 }
                 return route.getInstance(routeConfig);
+            },
+
+            _getRouteByNameOrPath: function (name) {
+                return this.nameToRoute[name] || this.getRouteByPath(name);
             },
 
             /**
@@ -383,6 +402,7 @@ angular.module("atsid.data",[
                 if (parent) {
                     parent.setItem(item);
                 }
+                this.emit('parentItemChanged', item);
             },
 
             /**
@@ -415,6 +435,7 @@ angular.module("atsid.data",[
 
             setItem: function (item) {
                 this.currentItem = item;
+                this.emit('itemChanged', item);
             },
 
             /**
@@ -492,7 +513,7 @@ angular.module("atsid.data",[
              * Is the route instance the same as another.
              * @param {Route} otherDataSource Route to compare to.
              */
-            isSame: function (otherDataSource) {
+            isEqual: function (otherDataSource) {
                 return otherDataSource._self === this._self;
             },
 
@@ -505,7 +526,8 @@ angular.module("atsid.data",[
              */
             runTransformers: function (type, newItems, oldItems) {
                 var tMap = this.transformerMap;
-                var deferred = $q.defer();
+                var items = newItems;
+
                 if (!tMap) {
                     tMap = this.transformerMap = {};
                     (this.transformers || []).forEach(function (transformer) {
@@ -516,32 +538,16 @@ angular.module("atsid.data",[
 
                 var tList = tMap[type];
                 if (tList && newItems) {
-                    var nextTransform = function (i, items) {
-                        var tDeferred = $q.defer();
-                        var transformer = tList[i];
-                        if (transformer) {
-                            if (oldItems !== undefined) {
-                                transformer.transform(items, oldItems, tDeferred);
-                            } else {
-                                transformer.transform(items, tDeferred);
-                            }
-                            tDeferred.promise.then(function (items) {
-                                nextTransform(i + 1, items);
-                            }, function (err) {
-                                deferred.reject(err);
-                            });
-                        } else {
-                            deferred.resolve(items);
-                        }
-                    };
-
-                    nextTransform(0, newItems);
-
-                } else {
-                    deferred.resolve(newItems);
+                    tList.forEach(function (transformer) {
+                        items = transformer.transform(items, oldItems);
+                    });
                 }
 
-                return deferred.promise;
+                return items;
+            },
+
+            hasTransformers: function (transformerType) {
+                return this.transformerMap && this.transformerMap[transformerType];
             },
 
             /**
@@ -552,8 +558,7 @@ angular.module("atsid.data",[
              * @return {Object} A promise to handle the response.
              */
             doRequest: function (method, params, item) {
-                var requestDeferred = $q.defer();
-                var promise = requestDeferred.promise;
+                var deferred = $q.defer();
                 var isArray = angular.isArray(item);
                 var oldItems = !item || isArray ? item : [item];
                 var self = this;
@@ -562,34 +567,61 @@ angular.module("atsid.data",[
                 var path = this.getPath(params);
                 var queryParams = this.getStoreParams(params);
 
-                this.runTransformers("request", oldItems).then(function (transformedItem) {
-                    var deferred = $q.defer();
-                    if (transformedItem && !isArray) {
-                        transformedItem = transformedItem[0];
+                if (this.hasTransformers("request")) {
+                    item = this.runTransformers("request", oldItems);
+                    if (item && !isArray) {
+                        item = item[0];
+                    }
+                }
+
+                this.emit("request", {
+                    method: method,
+                    path: path,
+                    params: queryParams,
+                    data: item
+                });
+
+                var result = this.store[method](path || null, queryParams, item);
+                if (result.then) {
+                    result.then(function (resp) {
+                        deferred.resolve(resp);
+                    }, function (err) {
+                        deferred.reject(err);
+                    });
+                } else if (result instanceof Error) {
+                    deferred.reject(result);
+                } else {
+                    deferred.resolve(result);
+                }
+
+                return deferred.promise.then(function (resp) {
+                    var isArray = angular.isArray(resp.data);
+                    var newItems = !resp.data || isArray ? resp.data : [resp.data];
+
+                    if (self.hasTransformers("response")) {
+                        newItems = self.runTransformers("response", newItems, oldItems || []);
+                        if (newItems && !isArray) {
+                            newItems = newItems[0];
+                        }
+                        resp.data = newItems;
                     }
 
-                    deferred.promise.then(function (resp) {
-                        var isArray = angular.isArray(resp.data);
-                        var newItems = !resp.data || isArray ? resp.data : [resp.data];
-
-                        self.runTransformers("response", newItems, oldItems || []).then(function (item) {
-                            if (!isArray) {
-                                item = item[0];
-                            }
-                            resp.data = item;
-                            requestDeferred.resolve(resp);
-                        }, function (err) {
-                            requestDeferred.reject(err);
-                        });
-                    }, function (err) {
-                        requestDeferred.reject(err);
+                    self.emit("response", {
+                        method: method,
+                        path: path,
+                        params: queryParams,
+                        response: resp
                     });
 
-                    self.store[method](path || null, queryParams, item, deferred);
+                    self.emit(method, resp.data);
+
+                    return resp;
+
                 }, function (err) {
-                    requestDeferred.reject(err);
+                    self.emit("error", err);
+                    return err;
                 });
-                return promise;
+
             },
 
             /**
@@ -785,8 +817,11 @@ angular.module("atsid.data",[
         dataSource.createDataSource = function (configFunc) {
             var config = {};
             var configObj = dataSourceConfigurationFactory(config);
-
-            configFunc.call(configObj, configObj);
+            if (angular.isFunction(configFunc)) {
+                configFunc.call(configObj, configObj);
+            } else if (angular.isObject(configFunc)) {
+                configObj.setDefaults(configFunc);
+            }
             return new DataSource(config);
         };
 

@@ -103,30 +103,28 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
                     data: data || '',
                     headers: angular.extend(angular.extend({}, this.config.headers), headers)
                 }).then(function (resp) {
-                    deferred.resolve(self.parseResponse(method.toLowerCase(), config, resp.data));
-                }, function (err) {
-                    deferred.reject(err);
+                    return self.parseResponse(method.toLowerCase(), config, resp.data);
                 });
             },
 
-            read: function (url, query, data, deferred) {
-                this.doRequest("GET", url, query, {}, data, deferred);
+            read: function (url, query, data) {
+                return this.doRequest("GET", url, query, {}, data);
             },
 
-            create: function (url, query, data, deferred) {
-                this.doRequest("POST", url, query, {}, data, deferred);
+            create: function (url, query, data) {
+                return this.doRequest("POST", url, query, {}, data);
             },
 
-            update: function (url, query, data, deferred) {
-                this.doRequest("PUT", url, query, {}, data, deferred);
+            update: function (url, query, data) {
+                return this.doRequest("PUT", url, query, {}, data);
             },
 
-            patch: function (url, query, data, deferred) {
-                this.doRequest("PATCH", url, query, {}, data, deferred);
+            patch: function (url, query, data) {
+                return this.doRequest("PATCH", url, query, {}, data);
             },
 
-            "delete": function (url, query, data, deferred) {
-                this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data, deferred);
+            "delete": function (url, query, data) {
+                return this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data);
             }
 
         });

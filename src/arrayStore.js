@@ -2,8 +2,7 @@
 
 angular.module("atsid.data.store").provider("arrayStore", [function () {
 
-    this.$get = ["store", function (store) {
-
+    this.$get = ["store", "namedError", function (store) {
         /**
          * @constructor
          * The constructor for a new Array store.
@@ -11,7 +10,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
          */
         function ArrayStore (config) {
             config = config || {};
-            this.array = angular.isArray(config) ? config : config.array || [];
+            this.array = [];
             this.idProperty = config.idProperty || "id";
             this.idToItems = {};
             this.sanitize = config.hasOwnProperty("sanitize") ? config.sanitize : true;
@@ -19,12 +18,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 this.getId = config.getId;
             }
             this.uid = 0;
-
-            if (this.array.length) {
-                this.array.splice(0, this.array.length).forEach(function (item) {
-                    this._addItem(item);
-                }, this);
-            }
+            this.setItems(angular.isArray(config) ? config : config.array || []);
         }
 
         ArrayStore.prototype = store({
@@ -57,6 +51,15 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 return this.uid;
             },
 
+            setItems: function (items) {
+                this.array.splice(0, this.array.length);
+                this.idToItems = {};
+                this.uid = 0;
+                items.forEach(function (item) {
+                    this._addItem(item);
+                }, this);
+            },
+
             findItem: function (path) {
                 var item = this.idToItems[path];
                 if (item && this.sanitize) {
@@ -76,42 +79,42 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 return !!this.idToItems[item];
             },
 
-            syncRead: function (path, params) {
+            read: function (path, params, data) {
                 var item = path !== undefined && path !== null ? this.findItem(path) : angular.copy(this.array);
                 if (item) {
                     return this.createResponse(item);
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncCreate: function (path, params, item) {
+            create: function (path, params, data) {
                 var idProperty = this.idProperty;
 
-                if (angular.isArray(item)) {
-                    return this.createResponse(item.map(function (item) {
+                if (angular.isArray(data)) {
+                    return this.createResponse(data.map(function (item) {
                         return this._addItem(item);
                     }, this));
                 }
-                return this.createResponse(this._addItem(item));
+                return this.createResponse(this._addItem(data));
             },
 
-            syncUpdate: function (path, params, changedItem) {
-                if (angular.isArray(changedItem)) {
-                    if (this.hasItem(changedItem)) {
-                        return this.createResponse(changedItem.map(function (item) {
+            update: function (path, params, data) {
+                if (angular.isArray(data)) {
+                    if (this.hasItem(data)) {
+                        return this.createResponse(data.map(function (item) {
                             return this._addItem(item, true);
                         }, this));
                     }
-                } else {
-                    if (this.hasItem(path)) {
-                        return this.createResponse(this._addItem(changedItem, true));
-                    }
+                } else if (this.hasItem(path)) {
+                    return this.createResponse(this._addItem(data, true));
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncPatch: function (path, params, changedItem) {
-                if (angular.isArray(changedItem)) {
-                    if (this.hasItem(changedItem)) {
-                        return this.createResponse(changedItem.map(function (changedItem) {
+            patch: function (path, params, data) {
+                if (angular.isArray(data)) {
+                    if (this.hasItem(data)) {
+                        return this.createResponse(data.map(function (changedItem) {
                             var item = this.findItem(changedItem[this.idProperty]);
                             angular.extend(item, changedItem);
                             return this._addItem(item, true);
@@ -120,16 +123,17 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 } else {
                     var item = this.findItem(path);
                     if (item) {
-                        angular.extend(item, changedItem);
+                        angular.extend(item, data);
                         return this.createResponse(this._addItem(item, true));
                     }
                 }
+                return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            syncDelete: function (path, params, items) {
-                if (items) {
-                    if (this.hasItem(items)) {
-                        items.forEach(function (item) {
+            delete: function (path, params, data) {
+                if (data) {
+                    if (this.hasItem(data)) {
+                        data.forEach(function (item) {
                             item = this.idToItems[item[this.idProperty]];
                             var index = this.array.indexOf(item);
                             this.array.splice(index, 1);
@@ -137,51 +141,11 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                         }, this);
                         return this.createResponse(null);
                     }
+                    return new store.errors.NotFoundError("No item at path " + path);
                 } else {
                     var item = {};
                     item[this.idProperty] = path;
-                    return this.syncDelete(null, params, [item]);
-                }
-            },
-
-            read: function (path, params, data, deferred) {
-                var resp = this.syncRead(path, params);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            create: function (path, params, data, deferred) {
-                var resp = this.syncCreate(path, params, data);
-                deferred.resolve(resp);
-            },
-
-            update: function (path, params, data, deferred) {
-                var resp = this.syncUpdate(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            patch: function (path, params, data, deferred) {
-                var resp = this.syncPatch(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
-                }
-            },
-
-            "delete": function (path, params, data, deferred) {
-                var resp = this.syncDelete(path, params, data);
-                if (resp) {
-                    deferred.resolve(resp);
-                } else {
-                    deferred.reject(new Error ("No item at path " + path));
+                    return this.delete(null, params, [item]);
                 }
             }
 

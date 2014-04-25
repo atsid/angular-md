@@ -4,30 +4,31 @@ angular.module("atsid.data.store", ["atsid.namedError", "atsid.eventable"]).prov
 
     this.$get = ["namedError", "eventable", function (namedError, eventable) {
         var errors = {
-            NotImlementedError: namedError("NotImlementedError", "Not implemented")
+            NotImlementedError: namedError("NotImlementedError", "Not implemented"),
+            NotFoundError: namedError("NotFoundError", "Not Found")
         };
         var storeFactory = function (config) {
             return eventable(angular.extend({
 
                 config: {},
 
-                read: function (url, query, data, deferred) {
+                read: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                create: function (url, query, data, deferred) {
+                create: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                update: function (url, query, data, deferred) {
+                update: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                patch: function (url, query, data, deferred) {
+                patch: function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 
-                "delete": function (url, query, data, deferred) {
+                "delete": function (url, query, data) {
                     throw new errors.NotImlementedError();
                 },
 

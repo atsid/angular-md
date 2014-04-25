@@ -65,12 +65,10 @@ describe('Service: http store', function () {
 
     describe("CRUD", function () {
         var id = 1;
-        var deferred;
         var digest;
         var resolved;
 
-        beforeEach(inject(function ($q, $rootScope) {
-            deferred = $q.defer();
+        beforeEach(inject(function ($rootScope) {
             digest = function () {
                 $rootScope.$digest();
                 httpMock.flush();
@@ -85,8 +83,7 @@ describe('Service: http store', function () {
                     name: "test5"
                 };
                 httpMock.when('POST', 'api/items').respond({ data: angular.extend({ id: 5 }, item) });
-                store.create("items", {}, item, deferred);
-                deferred.promise.then(function (resp) {
+                store.create("items", {}, item).then(function (resp) {
                     var newItem = resp.data;
                     expect(newItem.id).not.toBe(undefined);
                     expect(newItem.name).toBe(item.name);
@@ -103,8 +100,7 @@ describe('Service: http store', function () {
                     name: "test6"
                 }];
                 httpMock.when('POST', 'api/items').respond({ data: [{ name: items[0].name, id: 5 }, { name: items[1].name, id: 6 }] });
-                store.create("items", {}, items, deferred);
-                deferred.promise.then(function (resp) {
+                store.create("items", {}, items).then(function (resp) {
                     var newItems = resp.data;
                     expect(newItems instanceof Array).toBe(true);
                     expect(resp.count).toBe(items.length);
@@ -119,8 +115,7 @@ describe('Service: http store', function () {
                     name: "test5"
                 };
                 httpMock.when('POST', 'api/items').respond(500);
-                store.create("items", {}, item, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.create("items", {}, item).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -129,8 +124,7 @@ describe('Service: http store', function () {
 
             it("Should fail to batch create items", function () {
                 httpMock.when('POST', 'api/items').respond(500);
-                store.create("items", {}, [{ name: "1" }, { name: "2" }], deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.create("items", {}, [{ name: "1" }, { name: "2" }]).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -142,8 +136,7 @@ describe('Service: http store', function () {
 
             it("Should read all items", function () {
                 httpMock.when('GET', 'api/items').respond({ data: items, offset: 0, count: items.length });
-                store.read("items", {}, null, deferred);
-                deferred.promise.then(function (resp) {
+                store.read("items", {}, null).then(function (resp) {
                     expect(resp).not.toBe(undefined);
                     expect(resp.data instanceof Array).toBe(true);
                     resolved = true;
@@ -155,8 +148,7 @@ describe('Service: http store', function () {
             it("Should read 1 item", function () {
                 var item = items[0];
                 httpMock.when('GET', 'api/items/' + item.id).respond({ data: item });
-                store.read("items/" + item.id, {}, null, deferred);
-                deferred.promise.then(function (resp) {
+                store.read("items/" + item.id, {}, null).then(function (resp) {
                     expect(resp).not.toBe(undefined);
                     expect(resp.data.id).toBe(item.id);
                     resolved = true;
@@ -167,8 +159,7 @@ describe('Service: http store', function () {
 
             it("Should fail to read all items", function () {
                 httpMock.when('GET', 'api/items').respond(500);
-                store.read("items", {}, null, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.read("items", {}, null).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -178,8 +169,7 @@ describe('Service: http store', function () {
             it("Should fail to read 1 item", function () {
                 var item = items[0];
                 httpMock.when('GET', 'api/items/' + 100).respond(404);
-                store.read("items/" + 100, {}, null, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.read("items/" + 100, {}, null).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -193,8 +183,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PUT', 'api/items/' + item.id).respond({ data: angular.copy(changedItem) });
-                store.update("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function (resp) {
+                store.update("items/" + item.id, {}, changedItem).then(function (resp) {
                     expect(resp.data.id).toBe(item.id);
                     expect(resp.data.name).toBe(changedItem.name);
                     resolved = true;
@@ -209,8 +198,7 @@ describe('Service: http store', function () {
                 var changedItem1 = angular.extend(angular.copy(item1), { name: "new name1" });
                 var changedItem2 = angular.extend(angular.copy(item1), { name: "new name2" });
                 httpMock.when('PUT', 'api/items').respond({ data: angular.copy([changedItem1, changedItem2]) });
-                store.update("items", {}, [changedItem1, changedItem2], deferred);
-                deferred.promise.then(function (resp) {
+                store.update("items", {}, [changedItem1, changedItem2]).then(function (resp) {
                     expect(resp.data instanceof Array).toBe(true);
                     expect(resp.count).toBe(2);
                     resolved = true;
@@ -223,8 +211,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PUT', 'api/items/' + item.id).respond(500);
-                store.update("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.update("items/" + item.id, {}, changedItem).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -235,8 +222,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PUT', 'api/items/' + item.id).respond(500);
-                store.update("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.update("items/" + item.id, {}, changedItem).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -250,8 +236,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PATCH', 'api/items/' + item.id).respond({ data: angular.copy(changedItem) });
-                store.patch("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function (resp) {
+                store.patch("items/" + item.id, {}, changedItem).then(function (resp) {
                     expect(resp.data.id).toBe(item.id);
                     expect(resp.data.name).toBe(changedItem.name);
                     resolved = true;
@@ -266,8 +251,7 @@ describe('Service: http store', function () {
                 var changedItem1 = angular.extend(angular.copy(item1), { name: "new name1" });
                 var changedItem2 = angular.extend(angular.copy(item1), { name: "new name2" });
                 httpMock.when('PATCH', 'api/items').respond({ data: angular.copy([changedItem1, changedItem2]) });
-                store.patch("items", {}, [changedItem1, changedItem2], deferred);
-                deferred.promise.then(function (resp) {
+                store.patch("items", {}, [changedItem1, changedItem2]).then(function (resp) {
                     expect(resp.data instanceof Array).toBe(true);
                     expect(resp.count).toBe(2);
                     resolved = true;
@@ -280,8 +264,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PATCH', 'api/items/' + item.id).respond(500);
-                store.patch("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.patch("items/" + item.id, {}, changedItem).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -292,8 +275,7 @@ describe('Service: http store', function () {
                 var item = items[0];
                 var changedItem = angular.extend(angular.copy(item), { name: "new name"});
                 httpMock.when('PATCH', 'api/items/' + item.id).respond(500);
-                store.patch("items/" + item.id, {}, changedItem, deferred);
-                deferred.promise.then(function () {}, function (err) {
+                store.patch("items/" + item.id, {}, changedItem).then(function () {}, function (err) {
                     resolved = true;
                 });
                 digest();
@@ -307,8 +289,7 @@ describe('Service: http store', function () {
             it("Should delete an item", function () {
                 var item = items[0];
                 httpMock.when('DELETE', 'api/items/' + item.id).respond({ data: null });
-                store.delete("items/" + item.id, {}, item, deferred);
-                deferred.promise.then(function (resp) {
+                store.delete("items/" + item.id, {}, item).then(function (resp) {
                     resolved = true;
                 });
                 digest();
@@ -317,8 +298,7 @@ describe('Service: http store', function () {
 
             it("Should batch delete items", function () {
                 httpMock.when('DELETE', 'api/items').respond({ data: null });
-                store.delete("items", {}, items, deferred);
-                deferred.promise.then(function (resp) {
+                store.delete("items", {}, items).then(function (resp) {
                     resolved = true;
                 });
                 digest();
@@ -328,8 +308,7 @@ describe('Service: http store', function () {
             it("Should fail to delete an item", function () {
                 var item = items[0];
                 httpMock.when('DELETE', 'api/items/' + item.id).respond(500);
-                store.delete("items/" + item.id, {}, item, deferred);
-                deferred.promise.then(function () {}, function (resp) {
+                store.delete("items/" + item.id, {}, item).then(function () {}, function (resp) {
                     resolved = true;
                 });
                 digest();
@@ -338,8 +317,7 @@ describe('Service: http store', function () {
 
             it("Should fail to batch delete items", function () {
                 httpMock.when('DELETE', 'api/items').respond(500);
-                store.delete("items", {}, items, deferred);
-                deferred.promise.then(function () {}, function (resp) {
+                store.delete("items", {}, items).then(function () {}, function (resp) {
                     resolved = true;
                 });
                 digest();

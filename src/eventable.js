@@ -9,11 +9,24 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
      * Adds message based eventing to objects.  Used by
      * Item and ItemCollection.
      */
-    function Eventable (config) {
+    function Eventable (config, scope) {
         angular.extend(this, config);
+        if (scope) {
+            this._userEventableScope = scope;
+        } else {
+            this._defaultEventableScope = this;
+        }
     }
 
     Eventable.prototype = {
+        _getEventableScope: function () {
+            if (this._defaultEventableScope) {
+                return this._defaultEventableScope;
+            } else if (typeof this._userEventableScope === "string") {
+                return this[this._userEventableScope];
+            }
+            return this._userEventableScope;
+        },
 
         /**
          * Gets all the event listeners for a message.
@@ -21,7 +34,8 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
          * @return {Object[]} An array of listeners.
          */
         _getEventListeners: function (message) {
-            var messages = this.$eventMessages = this.$eventMessages || {};
+            var scope = this._getEventableScope();
+            var messages = scope.$eventMessages = scope.$eventMessages || {};
             var listeners = messages[message];
             if (!listeners) {
                 listeners = messages[message] = [];
@@ -30,7 +44,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
         },
 
         hasListeners: function (message) {
-            return !!this._getEventListeners(message);
+            return !!this._getEventableScope()._getEventListeners(message);
         },
 
         /**
@@ -82,8 +96,8 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
 
 
     this.$get = function () {
-        return function (config) {
-            return new Eventable(config);
+        return function (config, scope) {
+            return new Eventable(config, scope);
         };
     };
 
