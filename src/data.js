@@ -117,10 +117,9 @@ angular.module("atsid.data",[
         function getStore (storeConfig) {
             storeConfig = angular.isString(storeConfig) ? { type: "http", name: storeConfig } : storeConfig;
             return {
-                $: httpStore,
                 http: httpStore,
                 array: arrayStore
-            }[storeConfig.type || "$"](storeConfig);
+            }[storeConfig.type || "http"](storeConfig);
         }
 
         /**
@@ -252,10 +251,10 @@ angular.module("atsid.data",[
                 }
                 route.nameToRoute = {};
                 route.allowAutomaticRoutes = config.allowAutomaticRoutes;
-            }
-
-            if (config.name) {
-                route.nameToRoute[config.name] = route;
+                route.root = this;
+            } else {
+                route.nameToRoute = Object.create(route.nameToRoute);
+                parentRoute.routes[route.pathName] = route;
             }
 
             if (config.routes) {
@@ -279,18 +278,19 @@ angular.module("atsid.data",[
         Route.prototype = eventable({
 
             setStore: function (store) {
-                var currentStore = this.store;
-                if (currentStore) {
-                    this.storeListeners.forEach(function (storeListener) {
-                        storeListener.remove();
-                    });
-                }
-                this.storeListener = [
-                    store.on("message", function (e, message) {
-                        var args = Array.prototype.slice.call(arguments, 1);
-                        this.emit.apply(this, args);
-                    })
-                ];
+                // var currentStore = this.store;
+                // if (currentStore) {
+                //     this.storeListeners.forEach(function (storeListener) {
+                //         storeListener.remove();
+                //     });
+                // }
+                // this.storeListener = [
+                //     store.on("message", function (e, message) {
+                //         var args = Array.prototype.slice.call(arguments, 1);
+                //         this.emit.apply(this, args);
+                //     })
+                // ];
+                this.store = store;
             },
 
             /**
@@ -300,9 +300,11 @@ angular.module("atsid.data",[
              */
             addRoute: function (routeConfig) {
                 this._adding = true;
-                var parentRoute = routeConfig.path ? this.getRouteByPath(routeConfig.path, true) : this;
+                var parentRoute = routeConfig.path ? this.root.getRouteByPath(routeConfig.path, true) : this;
                 var route = new Route(routeConfig, parentRoute);
-                parentRoute.routes[route.pathName] = route;
+                if (routeConfig.name) {
+                    this.nameToRoute[routeConfig.name] = route;
+                }
                 this._adding = false;
                 return route;
             },

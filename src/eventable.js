@@ -67,7 +67,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
             args.unshift(event);
 
             listeners.forEach(function (listener) {
-                listener.fn.apply(null, args);
+                listener.fn.apply(listener.target, args);
             });
 
             return event;
@@ -83,6 +83,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
             var listeners = this._getEventListeners(message);
             var listener = {
                 fn: listenerFn,
+                target: this,
                 remove: function () {
                     var index = listeners.indexOf(this);
                     listeners.splice(index, 1);
@@ -91,6 +92,10 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
 
             listeners.push(listener);
             return listener;
+        },
+
+        removeAllListeners: function () {
+
         }
     };
 
