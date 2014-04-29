@@ -318,7 +318,8 @@ angular.module("atsid.data",[
                 var parentRoute = routeConfig.path ? this.root.getRouteByPath(routeConfig.path, true) : this;
                 var route = new Route(routeConfig, parentRoute);
                 if (routeConfig.name) {
-                    this.nameToRoute[routeConfig.name] = route;
+                    // TODO: Remove the root nameToRoute mapping at some point.  This is for backwards compatibility.
+                    this.root.nameToRoute[routeConfig.name] = this.nameToRoute[routeConfig.name] = route;
                 }
                 this._adding = false;
                 return route;
