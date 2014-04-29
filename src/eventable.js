@@ -92,13 +92,9 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
 
             listeners.push(listener);
             return listener;
-        },
-
-        removeAllListeners: function () {
-
         }
-    };
 
+    };
 
     this.$get = function () {
         return function (config, scope) {

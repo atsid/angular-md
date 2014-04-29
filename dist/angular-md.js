@@ -24,11 +24,24 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
      * Adds message based eventing to objects.  Used by
      * Item and ItemCollection.
      */
-    function Eventable (config) {
+    function Eventable (config, scope) {
         angular.extend(this, config);
+        if (scope) {
+            this._userEventableScope = scope;
+        } else {
+            this._defaultEventableScope = this;
+        }
     }
 
     Eventable.prototype = {
+        _getEventableScope: function () {
+            if (this._defaultEventableScope) {
+                return this._defaultEventableScope;
+            } else if (typeof this._userEventableScope === "string") {
+                return this[this._userEventableScope];
+            }
+            return this._userEventableScope;
+        },
 
         /**
          * Gets all the event listeners for a message.
@@ -36,7 +49,8 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
          * @return {Object[]} An array of listeners.
          */
         _getEventListeners: function (message) {
-            var messages = this.$eventMessages = this.$eventMessages || {};
+            var scope = this._getEventableScope();
+            var messages = scope.$eventMessages = scope.$eventMessages || {};
             var listeners = messages[message];
             if (!listeners) {
                 listeners = messages[message] = [];
@@ -45,7 +59,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
         },
 
         hasListeners: function (message) {
-            return !!this._getEventListeners(message);
+            return !!this._getEventableScope()._getEventListeners(message);
         },
 
         /**
@@ -68,7 +82,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
             args.unshift(event);
 
             listeners.forEach(function (listener) {
-                listener.fn.apply(null, args);
+                listener.fn.apply(listener.target, args);
             });
 
             return event;
@@ -84,6 +98,7 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
             var listeners = this._getEventListeners(message);
             var listener = {
                 fn: listenerFn,
+                target: this,
                 remove: function () {
                     var index = listeners.indexOf(this);
                     listeners.splice(index, 1);
@@ -93,12 +108,12 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
             listeners.push(listener);
             return listener;
         }
+
     };
 
-
     this.$get = function () {
-        return function (config) {
-            return new Eventable(config);
+        return function (config, scope) {
+            return new Eventable(config, scope);
         };
     };
 
@@ -275,9 +290,12 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
              * @return {String}
              */
             buildUrl: function (url, query) {
-                var baseUrl = this.config.baseUrl || "",
-                    queryList = [];
-                url = baseUrl + "/" + url;
+                url = url || "";
+                var baseUrl = this.config.baseUrl || "";
+                var queryList = [];
+                var separator = url && baseUrl.charAt(baseUrl.length - 1) !== "/" ? "/" : "";
+
+                url = baseUrl + separator + url;
                 angular.forEach(query, function (value, name) {
                     queryList.push(name + "=" + value);
                 });
@@ -604,7 +622,12 @@ angular.module("atsid.data",[
     var globalConfig = {};
     angular.extend(this, dataSourceConfigurationFactory(globalConfig));
 
-    this.$get = ["$q", "httpStore", "arrayStore", "eventable", function ($q, httpStore, arrayStore, eventable) {
+    this.$get = ["$q", "httpStore", "arrayStore", "eventable", "namedError", function ($q, httpStore, arrayStore, eventable, namedError) {
+        var errors = {
+            NotRootRouteError: namedError("NotRootRouteError", "Must be the root route to use this feature"),
+            ParameterError: namedError("ParameterError", "Missing Parameter"),
+            RouteNotFoundError: namedError("RouteNotFoundError", "The route does not exist")
+        };
 
         /**
          * Gets a data store based on a configuration.
@@ -615,10 +638,9 @@ angular.module("atsid.data",[
         function getStore (storeConfig) {
             storeConfig = angular.isString(storeConfig) ? { type: "http", name: storeConfig } : storeConfig;
             return {
-                $: httpStore,
                 http: httpStore,
                 array: arrayStore
-            }[storeConfig.type || "$"](storeConfig);
+            }[storeConfig.type || "http"](storeConfig);
         }
 
         /**
@@ -734,6 +756,7 @@ angular.module("atsid.data",[
             route.q = config.q;
             route.orderBy = config.orderBy;
             route.transformers = config.transformers || [];
+            route.buildTransformers(route.transformers);
 
             // Things that can be inherited
             if (config.count) {
@@ -745,15 +768,15 @@ angular.module("atsid.data",[
 
             // Things that must be inherited
             if (!parentRoute) {
-                if (config.store) {
-                    route.store = config.store;
-                }
                 route.nameToRoute = {};
                 route.allowAutomaticRoutes = config.allowAutomaticRoutes;
-            }
-
-            if (config.name) {
-                route.nameToRoute[config.name] = route;
+                route.root = this;
+                if (config.store) {
+                    route.setStore(config.store);
+                }
+            } else {
+                route.nameToRoute = Object.create(route.nameToRoute);
+                parentRoute.routes[route.pathName] = route;
             }
 
             if (config.routes) {
@@ -762,10 +785,6 @@ angular.module("atsid.data",[
                         routeConfig.path = path;
                     } else {
                         routeConfig.name = path;
-                    }
-
-                    if (routeConfig.path.charAt(0) !== "/" && route.path) {
-                        routeConfig.path = route.path + "/" + routeConfig.path;
                     }
                     route.addRoute(routeConfig);
                 });
@@ -776,6 +795,29 @@ angular.module("atsid.data",[
         }
         Route.prototype = eventable({
 
+            setStore: function (store) {
+                if (this.root !== this) {
+                    throw new errors.NotRootRouteError("Must be the root route to set the store");
+                }
+
+                var currentStore = this.store;
+                if (currentStore && this.storeListeners) {
+                    this.storeListeners.forEach(function (storeListener) {
+                        storeListener.remove();
+                    });
+                }
+
+                this.store = store;
+                if (store) {
+                    this.storeListeners = [
+                        store.on("message", function (e, message) {
+                            var args = Array.prototype.slice.call(arguments, 1);
+                            this.emit.apply(this, args);
+                        })
+                    ];
+                }
+            },
+
             /**
              * Add a new route.  This will add a permanent child route with
              * the configuration set as the default.
@@ -783,9 +825,17 @@ angular.module("atsid.data",[
              */
             addRoute: function (routeConfig) {
                 this._adding = true;
-                var parentRoute = routeConfig.path ? this.getRouteByPath(routeConfig.path, true) : this;
+                if (!routeConfig || (!routeConfig.path && !routeConfig.name)) {
+                    throw new errors.ParameterError("Cannot create route without a name or path.");
+                }
+                if (routeConfig.path && routeConfig.path.charAt(0) !== "/" && this.path) {
+                    routeConfig.path = this.path + "/" + routeConfig.path;
+                }
+                var parentRoute = routeConfig.path ? this.root.getRouteByPath(routeConfig.path, true) : this;
                 var route = new Route(routeConfig, parentRoute);
-                parentRoute.routes[route.pathName] = route;
+                if (routeConfig.name) {
+                    this.nameToRoute[routeConfig.name] = route;
+                }
                 this._adding = false;
                 return route;
             },
@@ -799,7 +849,7 @@ angular.module("atsid.data",[
             child: function (routeConfig) {
                 routeConfig = angular.isString(routeConfig) ? { name: routeConfig } : routeConfig;
                 if (!routeConfig.name && !routeConfig.path) {
-                    throw new Error("Cannot create route without a name or path.");
+                    throw new errors.ParameterError("Cannot create route without a name or path.");
                 }
                 var route = this._getRouteByNameOrPath(routeConfig.path || routeConfig.name);
                 if (!route) {
@@ -809,7 +859,7 @@ angular.module("atsid.data",[
                         throw new Error("Route \"" + (routeConfig.path || routeConfig.name) + "\" does not exist.");
                     }
                 }
-                return route.getInstance(routeConfig);
+                return route.getInstance(routeConfig, this);
             },
 
             _getRouteByNameOrPath: function (name) {
@@ -828,7 +878,7 @@ angular.module("atsid.data",[
 
             /**
              * Get an existing route by path components.
-             * @param  {Objectp[]} pathComponents
+             * @param  {Object[]} pathComponents
              * @param  {Boolean} skipLast Skip the last route.
              * @return {Object}
              */
@@ -843,8 +893,7 @@ angular.module("atsid.data",[
                         if (currentRoute._adding || currentRoute.allowAutomaticRoutes) {
                             route = currentRoute.addRoute({ path: pathComponent.name });
                         } else {
-                            currentRoute = undefined;
-                            return false;
+                            throw new errors.RouteNotFoundError("The route, \"" + pathComponent.name + "\", does not exist");
                         }
                     }
                     currentRoute = route;
@@ -889,7 +938,7 @@ angular.module("atsid.data",[
             },
 
             /**
-             * Get all the path params, including the current route's form
+             * Get all the path params, including the current route's from
              * the params argument.
              * @param  {Object} params Used to retrieve the current route's path param.
              * @return {Object} All the path params
@@ -928,7 +977,7 @@ angular.module("atsid.data",[
              * @param  {Object} config
              * @return {Object} New data source instance for a route.
              */
-            getInstance: function (config) {
+            getInstance: function (config, parent) {
                 var instance;
                 if (Object.create) {
                     instance = Object.create(this);
@@ -938,6 +987,7 @@ angular.module("atsid.data",[
                     instance = new InstanceProto();
                 }
                 instance.config = angular.extend(angular.copy(this.config), config);
+                instance.parent = parent;
                 return angular.extend(instance, config || {});
             },
 
@@ -947,7 +997,7 @@ angular.module("atsid.data",[
              * @return {String} The final path.
              */
             getPath: function (params) {
-                var pathParams = this.getPathParams(params);
+                var pathParams = this.getPathParams(params || {});
                 return buildPath(this.pathComponents, pathParams);
             },
 
@@ -959,7 +1009,7 @@ angular.module("atsid.data",[
              */
             getUrl: function (pathParams, queryParams) {
                 var url = this.getPath(pathParams);
-                return this.store.buildUrl(url, queryParams || {});
+                return this.store.buildUrl(url, this.getStoreParams(queryParams || {}));
             },
 
             /**
@@ -1000,6 +1050,14 @@ angular.module("atsid.data",[
                 return otherDataSource._self === this._self;
             },
 
+            buildTransformers: function (transformers) {
+                var tMap = this.transformerMap = {};
+                (transformers || []).forEach(function (transformer) {
+                    var tList = tMap[transformer.type] = tMap[transformer.type] || [];
+                    tList.push(transformer);
+                });
+            },
+
             /**
              * Runs any transformers of a given type.
              * @param {String} type
@@ -1010,14 +1068,6 @@ angular.module("atsid.data",[
             runTransformers: function (type, newItems, oldItems) {
                 var tMap = this.transformerMap;
                 var items = newItems;
-
-                if (!tMap) {
-                    tMap = this.transformerMap = {};
-                    (this.transformers || []).forEach(function (transformer) {
-                        var tList = tMap[transformer.type] = tMap[transformer.type] || [];
-                        tList.push(transformer);
-                    });
-                }
 
                 var tList = tMap[type];
                 if (tList && newItems) {
@@ -1067,42 +1117,43 @@ angular.module("atsid.data",[
                 var result = this.store[method](path || null, queryParams, item);
                 if (result.then) {
                     result.then(function (resp) {
-                        deferred.resolve(resp);
+                        deferred.resolve(self._resolveRequest(method, path, queryParams, oldItems, result));
                     }, function (err) {
+                        self.emit("error", err);
                         deferred.reject(err);
                     });
                 } else if (result instanceof Error) {
+                    self.emit("error", result);
                     deferred.reject(result);
                 } else {
-                    deferred.resolve(result);
+                    deferred.resolve(this._resolveRequest(method, path, queryParams, oldItems, result));
                 }
 
-                return deferred.promise.then(function (resp) {
-                    var isArray = angular.isArray(resp.data);
-                    var newItems = !resp.data || isArray ? resp.data : [resp.data];
+                return deferred.promise;
+            },
 
-                    if (self.hasTransformers("response")) {
-                        newItems = self.runTransformers("response", newItems, oldItems || []);
-                        if (newItems && !isArray) {
-                            newItems = newItems[0];
-                        }
-                        resp.data = newItems;
+            _resolveRequest: function (method, path, queryParams, oldItems, resp) {
+                var isArray = angular.isArray(resp.data);
+                var newItems = !resp.data || isArray ? resp.data : [resp.data];
+
+                if (this.hasTransformers("response")) {
+                    newItems = this.runTransformers("response", newItems, oldItems || []);
+                    if (newItems && !isArray) {
+                        newItems = newItems[0];
                     }
+                    resp.data = newItems;
+                }
 
-                    self.emit("response", {
-                        method: method,
-                        path: path,
-                        params: queryParams,
-                        data: newItems
-                    });
-
-                    return resp;
-
-                }, function (err) {
-                    self.emit("error", err);
-                    return err;
+                this.emit("response", {
+                    method: method,
+                    path: path,
+                    params: queryParams,
+                    response: resp
                 });
 
+                this.emit(method, resp.data);
+
+                return resp;
             },
 
             /**
@@ -1121,30 +1172,37 @@ angular.module("atsid.data",[
              */
             get: function (idOrParams) {
                 idOrParams = !angular.isObject(idOrParams) ? { id: idOrParams } : idOrParams;
+                if (!idOrParams.id) {
+                    throw new errors.ParameterError("Requires an item id or parameters that include an id.");
+                }
                 return this.query(idOrParams);
             },
 
             /**
              * Create a new item.
              * @param  {*} item  The item to create.
+             * @param  {Object} [params]
              * @return {Object} promise
              */
-            create: function (item) {
-                var itemParam = item[this.idProperty] || item[this.pathParam];
-                var params = {};
-                if (itemParam) {
-                    params[this.pathParam] = itemParam;
-                }
+            create: function (item, params) {
+                if (!item) { throw new errors.ParameterError("Requires an item to create."); }
+                //var itemParam = item[this.idProperty] || item[this.pathParam];
+                params = params || {};
+                // if (itemParam) {
+                //     params[this.pathParam] = itemParam;
+                // }
                 return this.doRequest("create", params, item);
             },
 
             /**
              * Update an existing item.
              * @param  {*} item
+             * @param  {Object} [params]
              * @return {Object} promise
              */
-            update: function (item) {
-                var params = {};
+            update: function (item, params) {
+                if (!item) { throw new errors.ParameterError("Requires an item to update."); }
+                params = params || {};
                 params[this.idProperty] = item[this.idProperty];
                 return this.doRequest("update", params, item);
             },
@@ -1153,40 +1211,41 @@ angular.module("atsid.data",[
              * Save an item.  If the item does not have an id, it will
              * be created, otherwise, it'll be updated.
              * @param  {*} item  The item to save.
+             * @param  {Object} [params]
              * @return {Object} promise
              */
-            save: function (item) {
+            save: function (item, params) {
                 if (item.hasOwnProperty(this.idProperty)) {
-                    return this.update(item);
+                    return this.update(item, params);
                 } else {
-                    return this.create(item);
+                    return this.create(item, params);
                 }
             },
 
             /**
              * Deletes an item.
              * @param  {*} item  The item to delete.
+             * @param  {Object} [params]
              * @return {Object} promise
              */
-            "delete": function (item) {
-                var params = {};
-                var promise;
+            "delete": function (item, params) {
+                if (!item) { throw new errors.ParameterError("Requires an item to delete."); }
+                params = params || {};
                 if (!angular.isArray(item)) {
                     params[this.idProperty] = item[this.idProperty];
-                    promise = this.doRequest("delete", params);
-                } else {
-                    promise = this.doRequest("delete", params, item);
+                    return this.doRequest("delete", params);
                 }
-                return promise;
+                return this.doRequest("delete", params, item);
             },
 
             /**
              * Same as delete, but doesn't have to be in square brackets to use.
              * @param  {*} item
+             * @param  {Object} [params]
              * @return {Object} promise
              */
-            remove: function (item) {
-                return this["delete"](item);
+            remove: function (item, params) {
+                return this["delete"](item, params);
             },
 
             /**
@@ -1216,7 +1275,6 @@ angular.module("atsid.data",[
              */
             batch: function (array, batchFn) {
                 var promises = [];
-                var realRoute = this;
 
                 if (!batchFn) {
                     batchFn = array;
@@ -1240,8 +1298,8 @@ angular.module("atsid.data",[
                             }
                         };
                     },
-                    callMethod = function (methodName, args) {
-                        var promise = addPromise(realRoute[methodName].apply(realRoute, args));
+                    callMethod = function (route, methodName, args) {
+                        var promise = addPromise(route[methodName].apply(route, args));
 
                         return createFakePromise(promise, function (oldPromise) {
                             promises.splice(promises.indexOf(promise), 1);
@@ -1250,25 +1308,25 @@ angular.module("atsid.data",[
 
                 var fakeRoute = this.getInstance({
                     query: function () {
-                        return callMethod("query", arguments);
+                        return callMethod(fakeRoute, "query", arguments);
                     },
                     get: function () {
-                        return callMethod("get", arguments);
+                        return callMethod(fakeRoute, "get", arguments);
                     },
                     create: function () {
-                        return callMethod("create", arguments);
+                        return callMethod(fakeRoute, "create", arguments);
                     },
                     update: function () {
-                        return callMethod("update", arguments);
+                        return callMethod(fakeRoute, "update", arguments);
                     },
                     save: function () {
-                        return callMethod("save", arguments);
+                        return callMethod(fakeRoute, "save", arguments);
                     },
                     "delete": function () {
-                        return callMethod("delete", arguments);
+                        return callMethod(fakeRoute, "delete", arguments);
                     },
                     remove: function () {
-                        return callMethod("delete", arguments);
+                        return callMethod(fakeRoute, "delete", arguments);
                     }
                 });
 
@@ -1305,6 +1363,8 @@ angular.module("atsid.data",[
             }
             return new DataSource(config);
         };
+
+        dataSource.errors = errors;
 
         return dataSource;
     }];

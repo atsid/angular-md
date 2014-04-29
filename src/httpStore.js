@@ -74,9 +74,12 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
              * @return {String}
              */
             buildUrl: function (url, query) {
-                var baseUrl = this.config.baseUrl || "",
-                    queryList = [];
-                url = baseUrl + "/" + url;
+                url = url || "";
+                var baseUrl = this.config.baseUrl || "";
+                var queryList = [];
+                var separator = url && baseUrl.charAt(baseUrl.length - 1) !== "/" ? "/" : "";
+
+                url = baseUrl + separator + url;
                 angular.forEach(query, function (value, name) {
                     queryList.push(name + "=" + value);
                 });
