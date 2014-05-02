@@ -243,7 +243,7 @@ angular.module("atsid.data.itemCollection", [
                 oldItemDataList = oldItemDataList || [];
                 return itemDataList.map(function (itemData, i) {
                     var itemId = (oldItemDataList[i] && oldItemDataList[i][this.idProperty]) || itemData[this.idProperty];
-                    var resp = this.itemStore.syncRead(itemId);
+                    var resp = this.itemStore.read(itemId);
                     var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
@@ -286,7 +286,7 @@ angular.module("atsid.data.itemCollection", [
              */
             addItem: function (itemData) {
                 var item = itemData.isIn && itemData.isIn(this) && !itemData.isDeleted() && itemData;
-                return this.itemStore.syncCreate("", null, item || this.createItem(itemData)).data;
+                return this.itemStore.create("", null, item || this.createItem(itemData)).data;
             },
 
             /**
@@ -480,7 +480,7 @@ angular.module("atsid.data.itemCollection", [
 
                 this.emit("willDeleteItem", item);
                 this.getDataSource()["delete"](item.getData()).then(function (resp) {
-                    self.itemStore.syncDelete(item[idProperty]);
+                    self.itemStore.delete(item[idProperty]);
                     // cache deleted items to properly delete later.
                     if (item.exists() && !self._canSave()) {
                         self.deletedItems.push(item);
