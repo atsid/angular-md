@@ -144,7 +144,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                     return new store.errors.NotFoundError("No item at path " + path);
                 } else {
                     var item = {};
-                    item[this.idProperty] = path;
+                    item[this.idProperty] = params[this.idProperty];
                     return this.delete(null, params, [item]);
                 }
             }
