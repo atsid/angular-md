@@ -11,21 +11,11 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
      */
     function Eventable (config, scope) {
         angular.extend(this, config);
-        if (scope) {
-            this._userEventableScope = scope;
-        } else {
-            this._defaultEventableScope = this;
-        }
     }
 
     Eventable.prototype = {
         _getEventableScope: function () {
-            if (this._defaultEventableScope) {
-                return this._defaultEventableScope;
-            } else if (typeof this._userEventableScope === "string") {
-                return this[this._userEventableScope];
-            }
-            return this._userEventableScope;
+            return this;
         },
 
         /**

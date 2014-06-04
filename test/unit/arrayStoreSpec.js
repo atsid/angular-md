@@ -175,11 +175,11 @@ describe('Service: array store', function () {
             expect(store.findItem(item2.id).name).toBe(item2.name);
         });
 
-        it("should delete an item", function () {
-            store.delete(id);
-            var resp = store.read(id);
-            expect(resp instanceof errors.NotFoundError).toBe(true);
-        });
+        // it("should delete an item", function () {
+        //     store.delete(id);
+        //     var resp = store.read(id);
+        //     expect(resp instanceof errors.NotFoundError).toBe(true);
+        // });
 
         it("should batch delete items", function () {
             var resp = store.read();

@@ -48,9 +48,10 @@ angular.module("atsid.data.itemCollection", [
             getData: function (useOriginalData) {
                 var data = {};
                 var source = useOriginalData ? this.$meta.originalData : this;
+                var exists = this.exists();
 
                 for (var propName in source) {
-                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$") {
+                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$" && (propName !== this.$meta.collection.idProperty || exists)) {
                         data[propName] = source[propName];
                     }
                 }
@@ -304,7 +305,6 @@ angular.module("atsid.data.itemCollection", [
              * This removes all items and their changes from the collection.
              */
             clear: function () {
-                this.items = [];
                 this.deletedItems = [];
                 var itemStore = this.itemStore = arrayStore({
                     sanitize: false,
@@ -369,17 +369,19 @@ angular.module("atsid.data.itemCollection", [
                 var promises = [];
 
                 var newItems = [];
+                var newItemsWithIds = [];
                 var changedItems = [];
                 var deletedItems = this.deletedItems;
 
                 // Find all the items that have changed or have been deleted.
-                this.items.forEach(function (item) {
+                this.itemStore.array.forEach(function (item) {
                     if (item.hasChanges()) {
                         if (!saveOriginal || !item.isSaved()) {
                             if (item.exists()) {
                                 changedItems.push(item.getData(saveOriginal));
                             } else {
                                 newItems.push(item.getData(saveOriginal));
+                                newItemsWithIds.push(item);
                             }
                         }
                     }
@@ -390,13 +392,13 @@ angular.module("atsid.data.itemCollection", [
                 // Create operation.
                 if (newItems.length) {
                     promises.push(this.dataSource.create(newItems).then(function (resp) {
-                        savedItems = self._refreshItems(resp.data, newItems);
+                        savedItems = savedItems.concat(self._refreshItems(resp.data, newItemsWithIds));
                     }));
                 }
                 // Update operation.
                 if (changedItems.length) {
                     promises.push(this.dataSource.update(changedItems).then(function (resp) {
-                        savedItems = self._refreshItems(resp.data, changedItems);
+                        savedItems = savedItems.concat(self._refreshItems(resp.data, changedItems));
                     }));
                 }
                 // Delete operation.
@@ -407,6 +409,9 @@ angular.module("atsid.data.itemCollection", [
                 $q.all(promises).then(function () {
                     deferred.resolve(savedItems, deletedItems);
                     self.emit("didSaveChanges", savedItems, deletedItems);
+                    savedItems.forEach(function (item) {
+                        item.emit("didSave", item);
+                    });
                 }, function (err) {
                     deferred.reject(err);
                 });
@@ -480,7 +485,7 @@ angular.module("atsid.data.itemCollection", [
 
                 this.emit("willDeleteItem", item);
                 this.getDataSource()["delete"](item.getData()).then(function (resp) {
-                    self.itemStore.delete(item[idProperty]);
+                    self.itemStore.delete('', item);
                     // cache deleted items to properly delete later.
                     if (item.exists() && !self._canSave()) {
                         self.deletedItems.push(item);
@@ -524,23 +529,23 @@ angular.module("atsid.data.itemCollection", [
             },
 
             get: function (index) {
-                return isNaN(index) ? this.getAll() : this.items[index];
+                return isNaN(index) ? this.getAll() : this.itemStore.array[index];
             },
 
             getAll: function () {
-                return this.items;
+                return this.itemStore.array;
             },
 
             count: function () {
-                return this.items.length;
+                return this.itemStore.array.length;
             },
 
             valueOf: function () {
-                return this.items.valueOf();
+                return this.itemStore.array.valueOf();
             },
 
             toString: function () {
-                return this.items.toString();
+                return this.itemStore.array.toString();
             }
 
         });
