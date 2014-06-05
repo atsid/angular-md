@@ -13,7 +13,7 @@ angular.module("atsid.data.itemCollection", [
          */
         function Item (itemData, collection) {
             // Private meta data
-            var meta = this.$meta = {
+            var meta = {
                 collection: collection,
 
                 /**
@@ -35,7 +35,12 @@ angular.module("atsid.data.itemCollection", [
                 unsaved: false
             };
 
+            this.$meta = function () {
+                return meta;
+            };
+
             this.setData(itemData);
+
         }
         Item.prototype = angular.extend(eventable(), {
 
@@ -47,11 +52,11 @@ angular.module("atsid.data.itemCollection", [
              */
             getData: function (useOriginalData) {
                 var data = {};
-                var source = useOriginalData ? this.$meta.originalData : this;
+                var source = useOriginalData ? this.$meta().originalData : this;
                 var exists = this.exists();
 
                 for (var propName in source) {
-                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$" && (propName !== this.$meta.collection.idProperty || exists)) {
+                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$" && (propName !== this.$meta().collection.idProperty || exists)) {
                         data[propName] = source[propName];
                     }
                 }
@@ -66,7 +71,7 @@ angular.module("atsid.data.itemCollection", [
              * @param {Boolean} perserveChanges Does not overwrite changed fields.
              */
             setData: function (data, perserveChanges) {
-                var originalData = this.$meta.originalData;
+                var originalData = this.$meta().originalData;
 
                 for (var propName in data) {
                     if (data.hasOwnProperty(propName) && propName !== "$meta") {
@@ -83,7 +88,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {Boolean}
              */
             hasChanges: function () {
-                return !angular.equals(this.getData(), this.$meta.originalData);
+                return !angular.equals(this.getData(), this.$meta().originalData);
             },
 
             /**
@@ -93,7 +98,7 @@ angular.module("atsid.data.itemCollection", [
              */
             query: function (params) {
                 var self = this;
-                return this.$meta.collection.queryItem(this, params).then(function (item) {
+                return this.$meta().collection.queryItem(this, params).then(function (item) {
                     this.setData(item, true);
                 });
             },
@@ -104,8 +109,8 @@ angular.module("atsid.data.itemCollection", [
              */
             save: function () {
                 var self = this;
-                return this.$meta.collection.saveItem(this).then(function (item, tempSave) {
-                    self.$meta.unsaved = tempSave;
+                return this.$meta().collection.saveItem(this).then(function (item, tempSave) {
+                    self.$meta().unsaved = tempSave;
                     self.emit("didSave", self);
                 });
             },
@@ -116,7 +121,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {Boolean}
              */
             isSaved: function () {
-                return !this.$meta.unsaved;
+                return !this.$meta().unsaved;
             },
 
             /**
@@ -124,7 +129,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {Boolean}
              */
             isDeleted: function () {
-                return this.$meta.deleted;
+                return this.$meta().deleted;
             },
 
             /**
@@ -132,7 +137,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {Boolean} True if it has been persisted.
              */
             exists: function () {
-                var idProperty = this.$meta.collection.idProperty;
+                var idProperty = this.$meta().collection.idProperty;
                 return !this.isDeleted() && this.isSaved() && this[idProperty] && String(this[idProperty]).search("temp") !== 0;
             },
 
@@ -142,9 +147,9 @@ angular.module("atsid.data.itemCollection", [
              */
             "delete": function () {
                 var self = this;
-                return this.$meta.collection.deleteItem(this).then(function () {
-                    self.$meta.unsaved = false;
-                    self.$meta.deleted = true;
+                return this.$meta().collection.deleteItem(this).then(function () {
+                    self.$meta().unsaved = false;
+                    self.$meta().deleted = true;
                 });
             },
 
@@ -160,7 +165,7 @@ angular.module("atsid.data.itemCollection", [
              * Selects the item.
              */
             select: function (deselectOthers) {
-                this.$meta.collection.selectItem(this, deselectOthers);
+                this.$meta().collection.selectItem(this, deselectOthers);
             },
 
             /**
@@ -169,7 +174,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {Boolean}
              */
             isIn: function (collection) {
-                return this.$meta.collection === collection;
+                return this.$meta().collection === collection;
             },
 
             /**
@@ -179,7 +184,7 @@ angular.module("atsid.data.itemCollection", [
              * @return {ItemCollection}
              */
             child: function (nameOrConfig) {
-                var collection = this.$meta.collection,
+                var collection = this.$meta().collection,
                     config = angular.extend({
                         initialQuery: false,
                         saveWithParent: collection.saveChildren,

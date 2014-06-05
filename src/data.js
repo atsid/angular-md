@@ -441,7 +441,7 @@ angular.module("atsid.data",[
                 }
 
                 while (parent && pc) {
-                    pathParams[pc.param] = params[pc.param] || (parent.currentItem && parent.currentItem[parent.idProperty]);
+                    pathParams[pc.param] = (parent.currentItem && parent.currentItem[parent.idProperty]) || params[pc.param];
                     parent = parent.getParent();
                     i -= 1;
                     pc = pcs[i];

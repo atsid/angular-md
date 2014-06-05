@@ -129,7 +129,7 @@ describe('Service: dataSource', function () {
             this.setStore(buildStore(false));
             this.addRoutes({
                 Contacts: angular.extend({
-                    path: "/contacts/:contactId",
+                    path: "/contacts/:id",
                     routes: {
                         Addresses: angular.extend({
                             path: "addresses/:addressId"
