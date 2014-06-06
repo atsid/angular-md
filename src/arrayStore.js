@@ -130,7 +130,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 return new store.errors.NotFoundError("No item at path " + path);
             },
 
-            delete: function (path, params, data) {
+            "delete": function (path, params, data) {
                 if (data) {
                     if (this.hasItem(data)) {
                         data.forEach(function (item) {
