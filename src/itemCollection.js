@@ -490,7 +490,7 @@ angular.module("atsid.data.itemCollection", [
 
                 this.emit("willDeleteItem", item);
                 this.getDataSource()["delete"](item.getData()).then(function (resp) {
-                    self.itemStore.delete('', item);
+                    self.itemStore["delete"]('', item);
                     // cache deleted items to properly delete later.
                     if (item.exists() && !self._canSave()) {
                         self.deletedItems.push(item);

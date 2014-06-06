@@ -145,7 +145,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 } else {
                     var item = {};
                     item[this.idProperty] = params[this.idProperty];
-                    return this.delete(null, params, [item]);
+                    return this["delete"](null, params, [item]);
                 }
             }
 

@@ -66,7 +66,7 @@
             <div ng-switch="!!selectedContact" style="margin-left:296px">
                 <form class='span8' name="form" ng-switch-when="true">
                     <div style="text-align:right">
-                        <button ng-disabled="!form.$valid" ng-click="selectedContact.delete();">Delete Contact</button>
+                        <button ng-disabled="!form.$valid" ng-click="selectedContact.remove();">Delete Contact</button>
                         <button ng-disabled="!form.$valid" ng-click="selectedContact.save();">Save Contact</button>
                     </div>
                     <label>Name * <input type="text" ng-model="selectedContact.name" required></label>
@@ -77,7 +77,7 @@
                     </div>
                     <div ng-repeat="address in addresses.items" style="margin-bottom:20px">
                         <div>
-                            <button ng-click="address.delete()">Delete</button>
+                            <button ng-click="address.remove()">Delete</button>
                         </div>
                         <label>Street <input type="text" ng-model="address.street"></label>
                         <label>City <input type="text" ng-model="address.city"></label>
