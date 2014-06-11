@@ -98,9 +98,7 @@ angular.module("atsid.data.itemCollection", [
              */
             query: function (params) {
                 var self = this;
-                return this.$meta().collection.queryItem(this, params).then(function (item) {
-                    this.setData(item, true);
-                });
+                return this.$meta().collection.queryItem(this, params);
             },
 
             /**
@@ -184,12 +182,29 @@ angular.module("atsid.data.itemCollection", [
              * @return {ItemCollection}
              */
             child: function (nameOrConfig) {
-                var collection = this.$meta().collection,
-                    config = angular.extend({
-                        initialQuery: false,
-                        saveWithParent: collection.saveChildren,
-                        saveChildren: collection.saveChildren
-                    }, angular.isString(nameOrConfig) ? { dataSource: nameOrConfig } : nameOrConfig);
+                var collection = this.$meta().collection;
+                var childMapper = collection.children || {};
+                var userConfig = nameOrConfig;
+
+                if (childMapper) {
+                    if (angular.isString(nameOrConfig)) {
+                        userConfig = childMapper[nameOrConfig];
+                        if (angular.isString(userConfig)) {
+                            userConfig = { dataSource: userConfig };
+                        }
+                        userConfig.childName = nameOrConfig;
+                    } else {
+                        userConfig = angular.extend(angular.copy(childMapper[nameOrConfig.childName]), nameOrConfig);
+                    }
+                    userConfig.items = this[userConfig.childName];
+                } else {
+                    userConfig = angular.isString(nameOrConfig) ? { dataSource: nameOrConfig } : nameOrConfig;
+                }
+
+                var config = angular.extend({
+                    saveWithParent: collection.saveChildren,
+                    saveChildren: collection.saveChildren
+                }, userConfig);
 
                 config.parentItem = this;
                 var dataSource = config.dataSource = collection.dataSource.child(config.dataSource);
@@ -204,12 +219,12 @@ angular.module("atsid.data.itemCollection", [
          * @param {Object} config
          */
         function ItemCollection (config) {
-            this.dataSource = angular.isString(config.dataSource) ? dataSource(config.dataSource) : config.dataSource;
-            this.idProperty = this.dataSource.idProperty;
-
             angular.extend(this, angular.extend({
                 saveWithParent: false
             }, config));
+
+            this.dataSource = angular.isString(config.dataSource) ? dataSource(config.dataSource) : config.dataSource;
+            this.idProperty = this.dataSource.idProperty;
 
             var parentItem = this.parentItem;
             if (parentItem) {
@@ -223,9 +238,8 @@ angular.module("atsid.data.itemCollection", [
 
             // Setup initial item store.
             this.clear();
-
-            if (!config.hasOwnProperty("initialQuery") || config.initialQuery === true) {
-                this.query();
+            if (this.items) {
+                this._refreshItems(this.items);
             }
         }
 
@@ -313,7 +327,7 @@ angular.module("atsid.data.itemCollection", [
                 this.deletedItems = [];
                 var itemStore = this.itemStore = arrayStore({
                     sanitize: false,
-                    array: this.items,
+                    array: [],
                     getId: function () {
                         if (!this.fakeUid) {
                             this.fakeUid = 0;
@@ -435,7 +449,11 @@ angular.module("atsid.data.itemCollection", [
                 var deferred = $q.defer();
                 var self = this;
 
-                this._verifyItem(item);
+                if (!item.isIn) {
+                    item = this.createItem(item);
+                } else {
+                    this._verifyItem(item);
+                }
 
                 this.emit("willQueryItem", item, params);
                 params = angular.extend({}, params);
@@ -465,13 +483,17 @@ angular.module("atsid.data.itemCollection", [
                 this._verifyItem(item);
 
                 this.emit("willSaveItem", item);
-                dataSource.save(item.getData()).then(function (resp) {
-                    var items = self._refreshItems([resp.data], [item]);
-                    deferred.resolve(items[0]);
-                    self.emit("didSaveItem", items[0]);
-                }, function (err) {
-                    deferred.reject(err);
-                });
+                if (item.hasChanges()) {
+                    dataSource.save(item.getData()).then(function (resp) {
+                        var items = self._refreshItems([resp.data], [item]);
+                        deferred.resolve(items[0]);
+                        self.emit("didSaveItem", items[0]);
+                    }, function (err) {
+                        deferred.reject(err);
+                    });
+                } else {
+                    deferred.resolve(item);
+                }
 
                 return deferred.promise;
             },
