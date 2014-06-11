@@ -2,7 +2,6 @@ angular.module("atsid.data.itemCollection", [
     "atsid.eventable",
     "atsid.data"
 ]).provider("itemCollection", [function () {
-
     this.$get = ["dataSource", "arrayStore", "eventable", "$q", "$timeout", function (dataSource, arrayStore, eventable, $q, $timeout) {
 
         /**
@@ -50,13 +49,13 @@ angular.module("atsid.data.itemCollection", [
              * @param {Boolean} useOriginalData Get the original / saved data without any changes.
              * @return {Object}
              */
-            getData: function (useOriginalData) {
+            getData: function (useOriginalData, includeTempId) {
                 var data = {};
                 var source = useOriginalData ? this.$meta().originalData : this;
                 var exists = this.exists();
 
                 for (var propName in source) {
-                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$" && (propName !== this.$meta().collection.idProperty || exists)) {
+                    if (source.hasOwnProperty(propName) && propName.charAt(0) !== "$" && (propName !== this.$meta().collection.idProperty || exists || includeTempId)) {
                         data[propName] = source[propName];
                     }
                 }
@@ -72,15 +71,24 @@ angular.module("atsid.data.itemCollection", [
              */
             setData: function (data, perserveChanges) {
                 var originalData = this.$meta().originalData;
+                var keys = Object.keys(data);
+                var propName;
 
-                for (var propName in data) {
-                    if (data.hasOwnProperty(propName) && propName !== "$meta") {
+                for (var i = 0; i < keys.length; i++) {
+                    propName = keys[i];
+                    if (propName !== "$meta") {
                         if (!perserveChanges || (!this.hasOwnProperty(propName) || originalData[propName] === this[propName])) {
-                            this[propName] = data[propName];
+                            // TODO: doing a deep copy to support complex objects.  Need to optimize this.
+                            this[propName] = angular.copy(data[propName]);
                         }
                         originalData[propName] = data[propName];
                     }
                 }
+            },
+
+            revertChanges: function () {
+                this.setData(this.$meta().originalData);
+                this.emit("didRevertChanges", this);
             },
 
             /**
@@ -105,12 +113,22 @@ angular.module("atsid.data.itemCollection", [
              * Save the item.
              * @return {Object} promise
              */
-            save: function () {
+            save: function (persist) {
                 var self = this;
-                return this.$meta().collection.saveItem(this).then(function (item, tempSave) {
+                var deferred = $q.defer();
+                this.$meta().collection.saveItem(this, persist).then(function (item, tempSave) {
+                    var promises = [];
                     self.$meta().unsaved = tempSave;
-                    self.emit("didSave", self);
+                    item.emit("didSave", item, function (promise) {
+                        promises.push(promise);
+                    });
+                    $q.all(promises).then(function() {
+                        deferred.resolve(item);
+                    }, function (error) {
+                        deferred.resolve(item);
+                    });
                 });
+                return deferred.promise;
             },
 
             /**
@@ -229,18 +247,18 @@ angular.module("atsid.data.itemCollection", [
             var parentItem = this.parentItem;
             if (parentItem) {
                 var self = this;
-                parentItem.on("didSave", function (e, item) {
+                parentItem.on("didSave", function (e, item, wait) {
                     if (parentItem.exists()) {
-                        self.saveChanges(self.saveWithParent ? false : true);
+                        wait(self.saveChanges(self.saveWithParent ? false : true));
                     }
+                });
+                parentItem.on("didRevertChanges", function (e) {
+                    self.revertChanges();
                 });
             }
 
             // Setup initial item store.
-            this.clear();
-            if (this.items) {
-                this._refreshItems(this.items);
-            }
+            this.setItems(this.items || []);
         }
 
         ItemCollection.prototype = angular.extend(eventable(), {
@@ -249,8 +267,8 @@ angular.module("atsid.data.itemCollection", [
              * Gets the ItemCollection's data source.
              * @return {DataSource}
              */
-            getDataSource: function () {
-                return this._canSave() ? this.dataSource : this.tempDataSource;
+            getDataSource: function (real) {
+                return real || this._canSave() ? this.dataSource : this.tempDataSource;
             },
 
             /**
@@ -263,7 +281,7 @@ angular.module("atsid.data.itemCollection", [
                 oldItemDataList = oldItemDataList || [];
                 return itemDataList.map(function (itemData, i) {
                     var itemId = (oldItemDataList[i] && oldItemDataList[i][this.idProperty]) || itemData[this.idProperty];
-                    var resp = this.itemStore.read(itemId);
+                    var resp = itemId && this.itemStore.read(itemId);
                     var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
@@ -319,6 +337,11 @@ angular.module("atsid.data.itemCollection", [
                 }, this);
             },
 
+            setItems: function (items) {
+                this.clear();
+                this._refreshItems(items);
+            },
+
             /**
              * Clear the collection, refreshing the internal store.
              * This removes all items and their changes from the collection.
@@ -339,6 +362,16 @@ angular.module("atsid.data.itemCollection", [
                 this.tempDataSource = dataSource.createDataSource(function (configurator) {
                     configurator.setStore(itemStore);
                 });
+            },
+
+            revertChanges: function () {
+                this.itemStore.array.forEach(function (item) {
+                    item.revertChanges();
+                });
+                this.deletedItems.forEach(function (item) {
+                    this.addItem(item.getData());
+                }, this);
+                this.deletedItems.splice(0, this.deletedItems.length);
             },
 
             /**
@@ -406,7 +439,7 @@ angular.module("atsid.data.itemCollection", [
                     }
                 });
 
-                this.emit("willSaveChanges", changedItems, deletedItems);
+                this.emit("willSaveChanges", newItems.concat(changedItems), deletedItems);
 
                 // Create operation.
                 if (newItems.length) {
@@ -474,8 +507,8 @@ angular.module("atsid.data.itemCollection", [
              * @param  {Item} item
              * @return {Promise}
              */
-            saveItem: function (item) {
-                var dataSource = this.getDataSource();
+            saveItem: function (item, persist) {
+                var dataSource = this.getDataSource(persist);
                 var idProperty = this.idProperty;
                 var deferred = $q.defer();
                 var self = this;
@@ -511,7 +544,7 @@ angular.module("atsid.data.itemCollection", [
                 this._verifyItem(item);
 
                 this.emit("willDeleteItem", item);
-                this.getDataSource()["delete"](item.getData()).then(function (resp) {
+                this.getDataSource()["delete"](item.getData(false, true)).then(function (resp) {
                     self.itemStore["delete"]('', item);
                     // cache deleted items to properly delete later.
                     if (item.exists() && !self._canSave()) {

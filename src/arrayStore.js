@@ -105,7 +105,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                             return this._addItem(item, true);
                         }, this));
                     }
-                } else if (this.hasItem(path)) {
+                } else if (this.hasItem(path || params[this.idProperty])) {
                     return this.createResponse(this._addItem(data, true));
                 }
                 return new store.errors.NotFoundError("No item at path " + path);
