@@ -285,6 +285,9 @@ angular.module("atsid.data.itemCollection", [
                     var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
+                        if (itemId !== itemData[this.idProperty]) {
+                            this.itemStore.refreshItemId(itemId, item);
+                        }
                     } else {
                         item = oldItemDataList[i];
                         if (item && item.isIn && item.isIn(this)) {

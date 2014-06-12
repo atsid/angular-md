@@ -375,20 +375,22 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 if (!item[idProperty]) {
                     item[idProperty] = this.getId();
                 }
-                if (this.idToItems[item[idProperty]]) {
-                    if (replace) {
-                        var index = this.array.indexOf(item);
-                        this.array.splice(index, 1);
-                    } else {
-                        return;
-                    }
-                }
 
                 if (this.sanitize) {
                     item = this.sanitizeData(item);
                 }
+
+                if (this.idToItems[item[idProperty]]) {
+                    if (replace) {
+                        var index = this.array.indexOf(item);
+                        this.array.splice(index, 1, item);
+                    } else {
+                        return;
+                    }
+                } else {
+                    this.array.push(item);
+                }
                 this.idToItems[item[idProperty]] = item;
-                this.array.push(item);
 
                 return this.sanitize ? angular.copy(item) : item;
             },
@@ -424,6 +426,14 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                     return !!this.idToItems[item[this.idProperty]];
                 }
                 return !!this.idToItems[item];
+            },
+
+            refreshItemId: function (id, item) {
+                if (this.idToItems[id]) {
+                    delete this.idToItems[id];
+                    this.idToItems[item[this.idProperty]] = item;
+                    this._addItem(item, true);
+                }
             },
 
             read: function (path, params, data) {
@@ -1648,6 +1658,9 @@ angular.module("atsid.data.itemCollection", [
                     var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
+                        if (itemId !== itemData[this.idProperty]) {
+                            this.itemStore.refreshItemId(itemId, item);
+                        }
                     } else {
                         item = oldItemDataList[i];
                         if (item && item.isIn && item.isIn(this)) {
