@@ -116,7 +116,7 @@ angular.module("atsid.data.itemCollection", [
             save: function (persist) {
                 var self = this;
                 var deferred = $q.defer();
-                this.$meta().collection.saveItem(this, persist).then(function (item, tempSave) {
+                this.$meta().collection.saveItem(this, persist || false).then(function (item, tempSave) {
                     var promises = [];
                     self.$meta().unsaved = tempSave;
                     item.emit("didSave", item, function (promise) {
@@ -154,16 +154,16 @@ angular.module("atsid.data.itemCollection", [
              */
             exists: function () {
                 var idProperty = this.$meta().collection.idProperty;
-                return !this.isDeleted() && this.isSaved() && this[idProperty] && String(this[idProperty]).search("temp") !== 0;
+                return String(this[idProperty]).search("temp") !== 0 && !this.isDeleted() && this.isSaved() && this[idProperty] !== undefined && this[idProperty] !== null;
             },
 
             /**
              * Deletes the item.
              * @return {Object} promise
              */
-            "delete": function () {
+            "delete": function (persist) {
                 var self = this;
-                return this.$meta().collection.deleteItem(this).then(function () {
+                return this.$meta().collection.deleteItem(this, persist || false).then(function () {
                     self.$meta().unsaved = false;
                     self.$meta().deleted = true;
                 });
@@ -267,8 +267,8 @@ angular.module("atsid.data.itemCollection", [
              * Gets the ItemCollection's data source.
              * @return {DataSource}
              */
-            getDataSource: function (real) {
-                return real || this._canSave() ? this.dataSource : this.tempDataSource;
+            getDataSource: function (persist) {
+                return persist || (persist === undefined && this._canSave()) ? this.dataSource : this.tempDataSource;
             },
 
             /**
@@ -281,7 +281,7 @@ angular.module("atsid.data.itemCollection", [
                 oldItemDataList = oldItemDataList || [];
                 return itemDataList.map(function (itemData, i) {
                     var itemId = (oldItemDataList[i] && oldItemDataList[i][this.idProperty]) || itemData[this.idProperty];
-                    var resp = itemId && this.itemStore.read(itemId);
+                    var resp = itemId !== undefined && itemId !== null && this.itemStore.read(itemId);
                     var item = resp && resp.data;
                     if (item) {
                         item.setData(itemData);
@@ -539,7 +539,7 @@ angular.module("atsid.data.itemCollection", [
              * @param  {Item} item
              * @return {Promise}
              */
-            deleteItem: function (item) {
+            deleteItem: function (item, persist) {
                 var idProperty = this.idProperty;
                 var deferred = $q.defer();
                 var self = this;
@@ -547,10 +547,10 @@ angular.module("atsid.data.itemCollection", [
                 this._verifyItem(item);
 
                 this.emit("willDeleteItem", item);
-                this.getDataSource()["delete"](item.getData(false, true)).then(function (resp) {
+                this.getDataSource(persist)["delete"](item.getData(false, true)).then(function (resp) {
                     self.itemStore["delete"]('', item);
                     // cache deleted items to properly delete later.
-                    if (item.exists() && !self._canSave()) {
+                    if (item.exists() && (persist === false || !self._canSave())) {
                         self.deletedItems.push(item);
                     }
                     if (self.selectedItem === item) {

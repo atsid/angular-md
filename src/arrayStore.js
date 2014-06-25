@@ -25,7 +25,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
 
             _addItem: function (item, replace) {
                 var idProperty = this.idProperty;
-                if (!item[idProperty]) {
+                if (item[idProperty] === null || item[idProperty] === undefined) {
                     item[idProperty] = this.getId();
                 }
 
@@ -75,7 +75,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                     return item.every(function (i) {
                         return this.hasItem(i);
                     }, this);
-                } else if (item[this.idProperty]) {
+                } else if (item[this.idProperty] !== undefined && item[this.idProperty] !== null) {
                     return !!this.idToItems[item[this.idProperty]];
                 }
                 return !!this.idToItems[item];
