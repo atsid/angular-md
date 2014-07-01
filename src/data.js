@@ -344,7 +344,7 @@ angular.module("atsid.data",[
                         throw new Error("Route \"" + (routeConfig.path || routeConfig.name) + "\" does not exist.");
                     }
                 }
-                return route.getInstance(routeConfig, this);
+                return route.getInstance(routeConfig, this.isEqual(this.root) ? null : this);
             },
 
             _getRouteByNameOrPath: function (name) {
@@ -471,8 +471,12 @@ angular.module("atsid.data",[
                     InstanceProto.prototype = this;
                     instance = new InstanceProto();
                 }
-                instance.config = angular.extend(angular.copy(this.config), config);
-                instance.parent = parent;
+                instance.config = angular.extend(angular.extend({}, this.config), config);
+                if (parent) {
+                    instance.parent = parent;
+                } else if (instance.parent) {
+                    instance.parent = instance.parent.getInstance();
+                }
                 return angular.extend(instance, config || {});
             },
 
@@ -835,7 +839,7 @@ angular.module("atsid.data",[
 
         var globalDataSource = new DataSource(globalConfig);
         var dataSource = function (routeConfig) {
-            return routeConfig ? globalDataSource.child(routeConfig) : globalDataSource;
+            return routeConfig ? globalDataSource.child(routeConfig) : globalDataSource.getInstance();
         };
 
         dataSource.createDataSource = function (configFunc) {

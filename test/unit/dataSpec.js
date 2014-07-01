@@ -319,7 +319,7 @@ describe('Service: dataSource', function () {
 
             var route = ds.child("users");
             expect(route.pathName).toBe("users");
-            expect(route.parent).toBe(ds);
+            expect(route.parent.isEqual(ds)).toBe(true);
         });
 
         it("should add a child route automatically with a configuration", function () {
