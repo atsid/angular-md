@@ -12,23 +12,23 @@ angular.module("atsid.data.store", ["atsid.namedError", "atsid.eventable"]).prov
 
                 config: {},
 
-                read: function (url, query, data) {
+                read: function (url, query, data, storeParams) {
                     throw new errors.NotImlementedError();
                 },
 
-                create: function (url, query, data) {
+                create: function (url, query, data, storeParams) {
                     throw new errors.NotImlementedError();
                 },
 
-                update: function (url, query, data) {
+                update: function (url, query, data, storeParams) {
                     throw new errors.NotImlementedError();
                 },
 
-                patch: function (url, query, data) {
+                patch: function (url, query, data, storeParams) {
                     throw new errors.NotImlementedError();
                 },
 
-                "delete": function (url, query, data) {
+                "delete": function (url, query, data, storeParams) {
                     throw new errors.NotImlementedError();
                 },
 

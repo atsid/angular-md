@@ -23,7 +23,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
         defaultConfigs[config.name] = config;
     };
 
-    this.$get = ["$http", "store", function ($http, store) {
+    this.$get = ["$http", "store", "$cacheFactory", function ($http, store, $cacheFactory) {
 
         /**
          * @constructor
@@ -89,6 +89,21 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
                 return url;
             },
 
+            getCache: function (cacheId) {
+                if (!this.cache) {
+                    this.cache = $cacheFactory(cacheId);
+                }
+                return this.cache;
+            },
+
+            invalidateCache: function () {
+                if (this.cache) {
+                    this.cache.removeAll();
+                    this.cache.destroy();
+                    this.cache = null;
+                }
+            },
+
             /**
              * Performs an HTTP request.
              * @param  {String} method
@@ -97,37 +112,42 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
              * @param  {Object} data
              * @param  {Object} deferred         A defer object to pass the response to.
              */
-            doRequest: function (method, url, query, headers, data, deferred) {
+            doRequest: function (method, url, query, headers, data, storeParams) {
                 var config = this.config;
                 var self = this;
                 return $http({
                     method: method,
                     url: this.buildUrl(url, query),
                     data: data || '',
-                    headers: angular.extend(angular.extend({}, this.config.headers), headers)
+                    headers: angular.extend(angular.extend({}, this.config.headers), headers),
+                    cache: storeParams.cache ? this.getCache(url) : false
                 }).then(function (resp) {
                     return self.parseResponse(method.toLowerCase(), config, resp.data);
                 });
             },
 
-            read: function (url, query, data) {
-                return this.doRequest("GET", url, query, {}, data);
+            read: function (url, query, data, storeParams) {
+                return this.doRequest("GET", url, query, {}, data, storeParams);
             },
 
-            create: function (url, query, data) {
-                return this.doRequest("POST", url, query, {}, data);
+            create: function (url, query, data, storeParams) {
+                this.invalidateCache();
+                return this.doRequest("POST", url, query, {}, data, storeParams);
             },
 
-            update: function (url, query, data) {
-                return this.doRequest("PUT", url, query, {}, data);
+            update: function (url, query, data, storeParams) {
+                this.invalidateCache();
+                return this.doRequest("PUT", url, query, {}, data, storeParams);
             },
 
-            patch: function (url, query, data) {
-                return this.doRequest("PATCH", url, query, {}, data);
+            patch: function (url, query, data, storeParams) {
+                this.invalidateCache();
+                return this.doRequest("PATCH", url, query, {}, data, storeParams);
             },
 
-            "delete": function (url, query, data) {
-                return this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data);
+            "delete": function (url, query, data, storeParams) {
+                this.invalidateCache();
+                return this.doRequest("DELETE", url, query, { "Content-Type": angular.isArray(data) ? "application/json" : null }, data, storeParams);
             }
 
         });

@@ -241,6 +241,7 @@ angular.module("atsid.data",[
             route.orderBy = config.orderBy;
             route.transformers = config.transformers || [];
             route.buildTransformers(route.transformers);
+            route.cache = config.cache || false;
 
             // Things that can be inherited
             if (config.count) {
@@ -588,6 +589,9 @@ angular.module("atsid.data",[
                 params = angular.extend(angular.copy(this.params || {}), params || {});
                 var path = this.getPath(params);
                 var queryParams = this.getStoreParams(params);
+                var storeParams = {
+                    cache: this.cache
+                };
 
                 if (this.hasTransformers("request")) {
                     item = this.runTransformers("request", oldItems);
@@ -603,7 +607,7 @@ angular.module("atsid.data",[
                     data: item
                 });
 
-                var result = this.store[method](path || null, queryParams, item);
+                var result = this.store[method](path || null, queryParams, item, storeParams);
                 if (result.then) {
                     result.then(function (resp) {
                         deferred.resolve(self._resolveRequest(method, path, queryParams, oldItems, result));
