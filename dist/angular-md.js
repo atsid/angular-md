@@ -1146,7 +1146,7 @@ angular.module("atsid.data",[
                 var result = this.store[method](path || null, queryParams, item, storeParams);
                 if (result.then) {
                     result.then(function (resp) {
-                        deferred.resolve(self._resolveRequest(method, path, queryParams, oldItems, result));
+                        deferred.resolve(self._resolveRequest(method, path, queryParams, oldItems, resp));
                     }, function (err) {
                         self.emit("error", err);
                         deferred.reject(err);
