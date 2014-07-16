@@ -1794,8 +1794,10 @@ angular.module("atsid.data.itemCollection", [
                         if (replace) {
                             self.clear();
                         }
-                        self._refreshItems(resp.data);
-                        deferred.resolve(self);
+                        resp = angular.extend({}, resp);
+                        resp.data = self._refreshItems(resp.data);
+                        self.serverTotal = resp.total;
+                        deferred.resolve(resp);
                         self.emit("didQuery", self);
                     }, function (err) {
                         deferred.reject(err);
