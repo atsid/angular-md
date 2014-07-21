@@ -1494,10 +1494,23 @@ angular.module("atsid.data.itemCollection", [
 
             /**
              * Determines if the item has changes.
+             * @param {Boolean} deep
              * @return {Boolean}
              */
-            hasChanges: function () {
-                return !angular.equals(this.getData(), this.$meta().originalData);
+            hasChanges: function (deep) {
+                var hasChanges = !angular.equals(this.getData(), this.$meta().originalData);
+
+                // Only check child changes if we don't have any changes
+                if (deep && !hasChanges) {
+                    var args = {
+                        item: this,
+                        hasChanges: false
+                    };
+                    this.emit("didHasChanges", args);
+                    hasChanges = !!args.hasChanges;
+                }
+
+                return hasChanges;
             },
 
             /**
@@ -1653,6 +1666,11 @@ angular.module("atsid.data.itemCollection", [
                         wait(self.saveChanges(self.saveWithParent ? false : true));
                     }
                 });
+                parentItem.on("didHasChanges", function (e, args) {
+                    if (!args.hasChanges) {
+                        args.hasChanges = self.hasChanges();
+                    }
+                });
                 parentItem.on("didRevertChanges", function (e) {
                     self.revertChanges();
                 });
@@ -1739,6 +1757,24 @@ angular.module("atsid.data.itemCollection", [
                 return items.map(function (item) {
                     return this.addItem(item);
                 }, this);
+            },
+
+            /**
+             * Returns true if this collection has any changes
+             * @param {Boolean} deep Recursively check for changes
+             */
+            hasChanges: function (deep) {
+                var item;
+                var allItems = this.getAll();
+                var childItemHasChanges;
+                for (var i = 0; i < allItems.length; i++) {
+                    item = allItems[i];
+                    childItemHasChanges = item.hasChanges(deep);
+                    if (childItemHasChanges) {
+                        return true;
+                    }
+                }
+                return false;
             },
 
             setItems: function (items) {
@@ -1867,7 +1903,9 @@ angular.module("atsid.data.itemCollection", [
                 $q.all(promises).then(function () {
                     deferred.resolve(savedItems, deletedItems);
                     self.emit("didSaveChanges", savedItems, deletedItems);
-                    savedItems.forEach(function (item) {
+
+                    // Fire did save on all
+                    this.getAll().forEach(function (item) {
                         item.emit("didSave", item);
                     });
                 }, function (err) {
