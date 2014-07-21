@@ -1901,12 +1901,20 @@ angular.module("atsid.data.itemCollection", [
                 }
                 // Perform operations
                 $q.all(promises).then(function () {
-                    deferred.resolve(savedItems, deletedItems);
+                    var childPromises = [];
                     self.emit("didSaveChanges", savedItems, deletedItems);
 
-                    // Fire did save on all
+                    // Save all children, and wait for them to finish
                     self.getAll().forEach(function (item) {
-                        item.emit("didSave", item);
+                        item.emit("didSave", item, function (promise) {
+                            childPromises.push(promise);
+                        });
+                    });
+
+                    $q.all(childPromises).then(function() {
+                        deferred.resolve(savedItems, deletedItems);
+                    }, function (error) {
+                        deferred.reject(error);
                     });
                 }, function (err) {
                     deferred.reject(err);
