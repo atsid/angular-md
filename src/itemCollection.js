@@ -34,6 +34,11 @@ angular.module("atsid.data.itemCollection", [
                 unsaved: false
             };
 
+            /**
+             * Meta data is accessed via a getter function so angular doesn't have circular dependency issues
+             * when copying.
+             * @return {Object}
+             */
             this.$meta = function () {
                 return meta;
             };
@@ -86,8 +91,30 @@ angular.module("atsid.data.itemCollection", [
                 }
             },
 
+            forEachChild: function (func) {
+                var results = [];
+                var cols = this.$meta().collectionCache;
+                var stop = false;
+                var stopFn = function () {
+                    stop = true;
+                };
+                if (cols) {
+                    Object.keys(cols).some(function (colName) {
+                        results.push(func(cols[colName], stopFn));
+                        return stop;
+                    });
+                }
+                return results;
+            },
+
+            /**
+             * Reverts any client side changes to an item.
+             */
             revertChanges: function () {
                 this.setData(this.$meta().originalData);
+                this.forEachChild(function (col) {
+                    col.revertChanges();
+                });
                 this.emit("didRevertChanges", this);
             },
 
@@ -95,8 +122,15 @@ angular.module("atsid.data.itemCollection", [
              * Determines if the item has changes.
              * @return {Boolean}
              */
-            hasChanges: function () {
-                return !angular.equals(this.getData(), this.$meta().originalData);
+            hasChanges: function (includeChildren) {
+                var changed = !angular.equals(this.getData(), this.$meta().originalData);
+                if (!changed && includeChildren) {
+                    this.forEachChild(function (col, stop) {
+                        changed = col.hasChanges();
+                        stop();
+                    });
+                }
+                return changed;
             },
 
             /**
@@ -200,21 +234,25 @@ angular.module("atsid.data.itemCollection", [
              * @return {ItemCollection}
              */
             child: function (nameOrConfig) {
-                var collection = this.$meta().collection;
+                var userConfig = angular.isString(nameOrConfig) ? { name: nameOrConfig } : nameOrConfig;
+                var meta = this.$meta();
+                var collection = meta.collection;
+                var collectionCache = meta.collectionCache;
                 var childMapper = collection.children || {};
-                var userConfig = nameOrConfig;
+                var mapperConfig;
+
+                if (!collectionCache) {
+                    collectionCache = meta.collectionCache = {};
+                }
+
+                if (collectionCache[userConfig.name]) {
+                    return collectionCache[userConfig.name];
+                }
 
                 if (childMapper) {
-                    if (angular.isString(nameOrConfig)) {
-                        userConfig = childMapper[nameOrConfig];
-                        if (angular.isString(userConfig)) {
-                            userConfig = { dataSource: userConfig };
-                        }
-                        userConfig.childName = nameOrConfig;
-                    } else {
-                        userConfig = angular.extend(angular.copy(childMapper[nameOrConfig.childName]), nameOrConfig);
-                    }
-                    userConfig.items = this[userConfig.childName];
+                    mapperConfig = childMapper[userConfig.name] || {};
+                    angular.extend(userConfig, angular.isString(mapperConfig) ? { dataSource: mapperConfig } : mapperConfig);
+                    userConfig.items = this[userConfig.name];
                 } else {
                     userConfig = angular.isString(nameOrConfig) ? { dataSource: nameOrConfig } : nameOrConfig;
                 }
@@ -227,7 +265,17 @@ angular.module("atsid.data.itemCollection", [
                 config.parentItem = this;
                 var dataSource = config.dataSource = collection.dataSource.child(config.dataSource);
                 dataSource.setParentItem(this);
-                return new ItemCollection(config);
+
+                var childCollection = collectionCache[userConfig.name] = new ItemCollection(config);
+                return childCollection;
+            },
+
+            saveChildren: function (saveOriginal) {
+                var self = this;
+                return $q.all(this.forEachChild(function (col) {
+                    col.dataSource.setParentItem(self);
+                    return col.saveChanges(saveOriginal);
+                }));
             }
 
         });
@@ -247,11 +295,6 @@ angular.module("atsid.data.itemCollection", [
             var parentItem = this.parentItem;
             if (parentItem) {
                 var self = this;
-                parentItem.on("didSave", function (e, item, wait) {
-                    if (parentItem.exists()) {
-                        wait(self.saveChanges(self.saveWithParent ? false : true));
-                    }
-                });
                 parentItem.on("didRevertChanges", function (e) {
                     self.revertChanges();
                 });
@@ -377,6 +420,17 @@ angular.module("atsid.data.itemCollection", [
                 this.deletedItems.splice(0, this.deletedItems.length);
             },
 
+            hasChanges: function () {
+                var changed = this.deletedItems.length;
+                if (!changed) {
+                    changed = this.itemStore.array.some(function (item) {
+                        return item.hasChanges(true);
+
+                    });
+                }
+                return changed;
+            },
+
             /**
              * Query items from the data source to populate the collection.
              * @param  {Object} [params]  parameters for the query.
@@ -464,10 +518,13 @@ angular.module("atsid.data.itemCollection", [
                 }
                 // Perform operations
                 $q.all(promises).then(function () {
-                    deferred.resolve(savedItems, deletedItems);
-                    self.emit("didSaveChanges", savedItems, deletedItems);
-                    savedItems.forEach(function (item) {
-                        item.emit("didSave", item);
+                    $q.all(self.itemStore.array.map(function (item) {
+                        return item.saveChildren(saveOriginal);
+                    })).then(function (resp) {
+                        deferred.resolve(savedItems, deletedItems);
+                        self.emit("didSaveChanges", savedItems, deletedItems);
+                    }, function (err) {
+                        deferred.reject(err);
                     });
                 }, function (err) {
                     deferred.reject(err);
@@ -514,26 +571,28 @@ angular.module("atsid.data.itemCollection", [
              */
             saveItem: function (item, persist) {
                 var dataSource = this.getDataSource(persist);
-                var idProperty = this.idProperty;
-                var deferred = $q.defer();
                 var self = this;
+                var promises = [];
 
                 this._verifyItem(item);
 
                 this.emit("willSaveItem", item);
                 if (item.hasChanges()) {
-                    dataSource.save(item.getData()).then(function (resp) {
-                        var items = self._refreshItems([resp.data], [item]);
-                        deferred.resolve(items[0]);
-                        self.emit("didSaveItem", items[0]);
+                    promises.push(dataSource.save(item.getData()).then(function (resp) {
+                        self._refreshItems([resp.data], [item]);
                     }, function (err) {
-                        deferred.reject(err);
-                    });
-                } else {
-                    deferred.resolve(item);
+                        throw err;
+                    }));
                 }
 
-                return deferred.promise;
+                return $q.all(promises).then(function () {
+                    return $q.all(persist ? [item.saveChildren()] : []).then(function (resp) {
+                        self.emit("didSaveItem", item);
+                        return item;
+                    });
+                }, function (err) {
+                    throw err;
+                });
             },
 
             /**
