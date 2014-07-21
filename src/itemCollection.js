@@ -504,7 +504,7 @@ angular.module("atsid.data.itemCollection", [
                     self.emit("didSaveChanges", savedItems, deletedItems);
 
                     // Fire did save on all
-                    this.getAll().forEach(function (item) {
+                    self.getAll().forEach(function (item) {
                         item.emit("didSave", item);
                     });
                 }, function (err) {
