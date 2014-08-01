@@ -544,9 +544,7 @@ angular.module("atsid.data.itemCollection", [
                 var deferred = $q.defer();
                 var self = this;
 
-                if (!item.isIn) {
-                    item = this.createItem(item);
-                } else {
+                if (item.isIn) {
                     this._verifyItem(item);
                 }
 
@@ -554,7 +552,11 @@ angular.module("atsid.data.itemCollection", [
                 params = angular.extend({}, params);
                 params[idProperty] = item[idProperty];
                 this.dataSource.get(params).then(function (resp) {
-                    item.setData(resp.data);
+                    if (item.isIn) {
+                        item.setData(resp.data);
+                    } else {
+                        item = self.addItem(resp.data);
+                    }
                     deferred.resolve(item);
                     self.emit("didQueryItem", item, params);
                 }, function (err) {
