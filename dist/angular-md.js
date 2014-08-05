@@ -1887,14 +1887,12 @@ angular.module("atsid.data.itemCollection", [
 
                 // Find all the items that have changed or have been deleted.
                 this.itemStore.array.forEach(function (item) {
-                    if (item.hasChanges()) {
+                    if (!item.exists()) {
+                        newItems.push(item.getData(saveOriginal));
+                        newItemsWithIds.push(item);
+                    } else if (item.hasChanges()) {
                         if (!saveOriginal || !item.isSaved()) {
-                            if (item.exists()) {
-                                changedItems.push(item.getData(saveOriginal));
-                            } else {
-                                newItems.push(item.getData(saveOriginal));
-                                newItemsWithIds.push(item);
-                            }
+                            changedItems.push(item.getData(saveOriginal));
                         }
                     }
                 });
