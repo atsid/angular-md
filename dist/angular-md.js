@@ -656,6 +656,10 @@ angular.module("atsid.data",[
                 configObject.store = null;
             },
 
+            setStoreTransformers: function (transformers) {
+                configObject.storeConfig.transformers = transformers;
+            },
+
             /**
              * Adds resource routes to the data source.  A route is a path to a
              * particular child data source within the root source.
