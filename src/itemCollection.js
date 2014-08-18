@@ -207,8 +207,8 @@ angular.module("atsid.data.itemCollection", [
              * Deletes the item.
              * @return {Object} promise
              */
-            remove: function () {
-                return this["delete"]();
+            remove: function (persist) {
+                return this["delete"](persist);
             },
 
             /**
