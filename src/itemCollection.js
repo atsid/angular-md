@@ -127,7 +127,9 @@ angular.module("atsid.data.itemCollection", [
                 if (!changed && includeChildren) {
                     this.forEachChild(function (col, stop) {
                         changed = col.hasChanges();
-                        stop();
+                        if (changed) {
+                            stop();
+                        }
                     });
                 }
                 return changed;
