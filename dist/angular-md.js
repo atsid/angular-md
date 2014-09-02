@@ -314,8 +314,8 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
             invalidateCache: function () {
                 if (this.cache) {
                     this.cache.removeAll();
-                    this.cache.destroy();
-                    this.cache = null;
+                    //this.cache.destroy();
+                    //this.cache = null;
                 }
             },
 
