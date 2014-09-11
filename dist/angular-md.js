@@ -499,7 +499,12 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
             },
 
             read: function (path, params, data) {
-                var item = path !== undefined && path !== null ? this.findItem(path) : angular.copy(this.array);
+                var item;
+                if (path !== undefined && path !== null) {
+                    item = this.findItem(path);
+                } else {
+                    item = this.sanitize ? angular.copy(this.array) : this.array.slice(0);
+                }
                 if (item) {
                     return this.createResponse(item);
                 }
