@@ -296,7 +296,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
 
                 url = baseUrl + separator + url;
                 angular.forEach(query, function (value, name) {
-                    queryList.push(name + "=" + value);
+                    queryList.push(name + "=" + encodeURIComponent(value));
                 });
                 if (queryList.length) {
                     url += "?" + queryList.join("&");
