@@ -1,7 +1,7 @@
 {
   "name": "angular-md",
   "description": "Persistence framework for angular",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "dependencies": {},
   "devDependencies": {
     "grunt-open": "~0.2.3",
