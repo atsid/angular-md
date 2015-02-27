@@ -23,11 +23,11 @@ module.exports = function(config) {
       'src/httpStore.js',
       'src/data.js',
       'src/itemCollection.js',
-      'test/unit/**.js'
+      'test/specs/**.js'
     ],
 
     preprocessors: {
-      //'**/src/*.js': 'coverage'
+      '**/src/*.js': 'coverage'
     },
 
 
