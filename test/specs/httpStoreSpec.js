@@ -1,6 +1,8 @@
+var errors = require("../../src/errors");
+
 describe('Service: http store', function () {
     var provider;
-    beforeEach(module("atsid.data.store", function (httpStoreProvider) {
+    beforeEach(angular.mock.module(require("../../src/httpStore"), function (httpStoreProvider) {
         provider = httpStoreProvider;
         httpStoreProvider.addStore({
             name: "test",

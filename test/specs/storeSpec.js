@@ -1,11 +1,11 @@
-describe('Service: store', function () {
-    var testStore,
-        errors;
+var errors = require("../../src/errors");
 
-    beforeEach(module("atsid.data.store"));
-    beforeEach(inject(function (store) {
-        testStore = store({});
-        errors = store.errors;
+describe('Service: store', function () {
+    var testStore;
+
+    beforeEach(angular.mock.module(require("../../src/baseStore")));
+    beforeEach(inject(function (baseStore) {
+        testStore = baseStore({});
     }));
 
     it("should throw an error if required methods are not implemented", function () {

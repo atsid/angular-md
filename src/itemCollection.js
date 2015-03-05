@@ -1,6 +1,6 @@
 angular.module("atsid.data.itemCollection", [
-    "atsid.eventable",
-    "atsid.data"
+    require("./eventable"),
+    require("./data")
 ]).provider("itemCollection", [function () {
     this.$get = ["dataSource", "arrayStore", "eventable", "$q", "$timeout", function (dataSource, arrayStore, eventable, $q, $timeout) {
 
@@ -682,3 +682,5 @@ angular.module("atsid.data.itemCollection", [
     }];
 
 }]);
+
+module.exports = "atsid.data.itemCollection";

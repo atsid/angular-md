@@ -1,5 +1,3 @@
-"use strict";
-
 /**
  * @ngdoc provider
  * @name atsid.data:httpStore
@@ -7,7 +5,9 @@
  * @description
  * An HTTP based data store used by a data source.
  */
-angular.module("atsid.data.store").provider("httpStore", [function () {
+angular.module("atsid.data.httpStore", [
+    require("./baseStore")
+]).provider("httpStore", [function () {
 
     // Map of default store configurations.
     var defaultConfigs = {};
@@ -23,7 +23,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
         defaultConfigs[config.name] = config;
     };
 
-    this.$get = ["$http", "store", "$cacheFactory", function ($http, store, $cacheFactory) {
+    this.$get = ["$http", "baseStore", "$cacheFactory", function ($http, baseStore, $cacheFactory) {
 
         /**
          * @constructor
@@ -52,7 +52,7 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
             this.buildTransformers(config.transformers || []);
         }
 
-        HTTPStore.prototype = store({
+        HTTPStore.prototype = baseStore({
 
             /**
              * Parses the response of an http request.
@@ -201,3 +201,5 @@ angular.module("atsid.data.store").provider("httpStore", [function () {
 
     }];
 }]);
+
+module.exports = "atsid.data.httpStore";

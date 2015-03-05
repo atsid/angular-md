@@ -1,8 +1,10 @@
-"use strict";
+var errors = require("./errors");
 
-angular.module("atsid.data.store").provider("arrayStore", [function () {
+angular.module("atsid.data.arrayStore", [
+    require("./baseStore")
+]).provider("arrayStore", [function () {
 
-    this.$get = ["store", "namedError", function (store) {
+    this.$get = ["baseStore", function (baseStore) {
         /**
          * @constructor
          * The constructor for a new Array store.
@@ -21,7 +23,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
             this.setItems(angular.isArray(config) ? config : config.array || []);
         }
 
-        ArrayStore.prototype = store({
+        ArrayStore.prototype = baseStore({
 
             _addItem: function (item, replace) {
                 var idProperty = this.idProperty;
@@ -99,7 +101,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 if (item) {
                     return this.createResponse(item);
                 }
-                return new store.errors.NotFoundError("No item at path " + path);
+                return new errors.NotFoundError("No item at path " + path);
             },
 
             create: function (path, params, data) {
@@ -123,7 +125,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                 } else if (this.hasItem(path || params[this.idProperty])) {
                     return this.createResponse(this._addItem(data, true));
                 }
-                return new store.errors.NotFoundError("No item at path " + path);
+                return new errors.NotFoundError("No item at path " + path);
             },
 
             patch: function (path, params, data) {
@@ -142,7 +144,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                         return this.createResponse(this._addItem(item, true));
                     }
                 }
-                return new store.errors.NotFoundError("No item at path " + path);
+                return new errors.NotFoundError("No item at path " + path);
             },
 
             "delete": function (path, params, data) {
@@ -156,7 +158,7 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
                         }, this);
                         return this.createResponse(null);
                     }
-                    return new store.errors.NotFoundError("No item at path " + path);
+                    return new errors.NotFoundError("No item at path " + path);
                 } else {
                     var item = {};
                     item[this.idProperty] = params[this.idProperty];
@@ -172,3 +174,5 @@ angular.module("atsid.data.store").provider("arrayStore", [function () {
 
     }];
 }]);
+
+module.exports = "atsid.data.arrayStore";

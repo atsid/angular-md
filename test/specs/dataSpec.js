@@ -1,16 +1,16 @@
+var errors = require("../../src/errors");
+
 describe('Service: dataSource', function () {
     var dataSourceService;
-    var errors;
     var storeService;
     var arrayStoreService;
     var q;
     var scope;
 
-    beforeEach(module("atsid.data"));
-    beforeEach(inject(["dataSource", "store", "arrayStore", "$q", "$rootScope", function (dataSource, store, arrayStore, $q, $rootScope) {
+    beforeEach(angular.mock.module(require("../../src/data")));
+    beforeEach(inject(["dataSource", "baseStore", "arrayStore", "$q", "$rootScope", function (dataSource, baseStore, arrayStore, $q, $rootScope) {
         dataSourceService = dataSource;
-        errors = dataSource.errors;
-        storeService = store;
+        storeService = baseStore;
         arrayStoreService = arrayStore;
         q = $q;
         scope = $rootScope;

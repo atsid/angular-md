@@ -1,10 +1,10 @@
-describe('Service: array store', function () {
+var errors = require("../../src/errors");
 
-    beforeEach(module("atsid.data.store"));
+describe('Service: array store', function () {
+    beforeEach(angular.mock.module(require("../../src/arrayStore")));
 
     var store;
-    var errors;
-    beforeEach(inject(["arrayStore", "store", function(arrayStore, storeService) {
+    beforeEach(inject(["arrayStore", function(arrayStore) {
         store = arrayStore({
             array: [{
                 id: 1,
@@ -14,7 +14,6 @@ describe('Service: array store', function () {
                 name: "test2"
             }]
         });
-        errors = storeService.errors;
     }]));
 
     describe("Configuration", function () {

@@ -1,5 +1,6 @@
 // Karma configuration
 // Generated on Fri Jan 31 2014 11:18:51 GMT-0800 (PST)
+var istanbul = require('browserify-istanbul');
 
 module.exports = function(config) {
   config.set({
@@ -9,41 +10,36 @@ module.exports = function(config) {
 
 
     // frameworks to use
-    frameworks: ['jasmine'],
+    frameworks: ['jasmine', 'browserify'],
 
 
     // list of files / patterns to load in the browser
     files: [
       'bower_components/angular/angular.js',
       'bower_components/angular-mocks/angular-mocks.js',
-      'src/namedError.js',
-      'src/eventable.js',
-      'src/store.js',
-      'src/arrayStore.js',
-      'src/httpStore.js',
-      'src/data.js',
-      'src/itemCollection.js',
       'test/specs/**.js'
     ],
 
     preprocessors: {
-      '**/src/*.js': 'coverage'
+      'test/specs/**/*.js': [ 'browserify']
     },
 
-
-    // list of files to exclude
-    exclude: [
-
-    ],
-
+    browserify: {
+      debug: true,
+      transform: [istanbul({
+        ignore: ['**/node_modules/**', '**/test/**']
+      })],
+    },
 
     // test results reporter to use
     // possible values: 'dots', 'progress', 'junit', 'growl', 'coverage'
-    reporters: ['progress', 'coverage'],
+    reporters: ['coverage', 'progress'],
 
     coverageReporter: {
-      type : 'html',
-      dir : 'test/coverage/'
+      dir : 'test/coverage/',
+      reporters: [
+        { type: 'html', /*other options*/ }
+      ]
     },
 
 
@@ -72,7 +68,7 @@ module.exports = function(config) {
     // - Safari (only Mac; has to be installed with `npm install karma-safari-launcher`)
     // - PhantomJS
     // - IE (only Windows; has to be installed with `npm install karma-ie-launcher`)
-    browsers: ['Chrome'],
+    browsers: ['PhantomJS'],
 
 
     // If browser does not capture in given timeout [ms], kill it

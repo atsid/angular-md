@@ -1,6 +1,4 @@
-"use strict";
-
-angular.module("atsid.eventable", []).provider("eventable", [function () {
+angular.module("atsid.eventable",[]).provider("eventable", [function () {
 
     /**
      * @constructor
@@ -93,3 +91,5 @@ angular.module("atsid.eventable", []).provider("eventable", [function () {
     };
 
 }]);
+
+module.exports = "atsid.eventable";

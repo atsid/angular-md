@@ -1,7 +1,7 @@
 describe('Service: eventable', function () {
     var testMessage = "test";
 
-    beforeEach(module("atsid.eventable"));
+    beforeEach(angular.mock.module(require("../../src/eventable")));
 
     it("should create a new eventable object", inject(function (eventable) {
         var eventableObject = eventable({});

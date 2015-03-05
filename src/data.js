@@ -1,4 +1,4 @@
-"use strict";
+var errors = require("./errors");
 
 /**
  * @ngdoc provider
@@ -8,8 +8,9 @@
  * Represents a data source.
  */
 angular.module("atsid.data",[
-    "atsid.eventable",
-    "atsid.data.store"
+    require("./eventable"),
+    require("./httpStore"),
+    require("./arrayStore")
 ]).provider("dataSource", [function () {
 
     /**
@@ -110,12 +111,7 @@ angular.module("atsid.data",[
     var globalConfig = {};
     angular.extend(this, dataSourceConfigurationFactory(globalConfig));
 
-    this.$get = ["$q", "httpStore", "arrayStore", "eventable", "namedError", function ($q, httpStore, arrayStore, eventable, namedError) {
-        var errors = {
-            NotRootRouteError: namedError("NotRootRouteError", "Must be the root route to use this feature"),
-            ParameterError: namedError("ParameterError", "Missing Parameter"),
-            RouteNotFoundError: namedError("RouteNotFoundError", "The route does not exist")
-        };
+    this.$get = ["$q", "httpStore", "arrayStore", "eventable", function ($q, httpStore, arrayStore, eventable) {
 
         /**
          * Gets a data store based on a configuration.
@@ -867,3 +863,5 @@ angular.module("atsid.data",[
     }];
 
 }]);
+
+module.exports = "atsid.data";

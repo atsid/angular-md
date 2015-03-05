@@ -1,23 +1,12 @@
-'use strict';
 
 module.exports = function (grunt) {
 	// load all grunt tasks
-	require('matchdep').filterDev('grunt-*').forEach(grunt.loadNpmTasks);
+	require('load-grunt-tasks')(grunt);
 
 	grunt.initConfig({
         pkg: grunt.file.readJSON('package.json'),
 		clean : {
-			dist : {
-				files : [{
-                    dot : true,
-                    src : [
-                        '.tmp',
-                        'dist/*',
-                        '!dist/.git*'
-                    ]
-                }]
-			},
-			server : '.tmp'
+            build: ['dist/*', '!dist/.git*']
 		},
 		jshint : {
 			options : {
@@ -33,55 +22,40 @@ module.exports = function (grunt) {
 			unit : {
 				configFile : 'karma.unit.conf.js',
 				singleRun : true,
-                browser: 'Chrome'
+                browser: 'PhantomJS'
 			}
 		},
-		concat : {
-            options: {
-
-            },
-			dist : {
-				src: [
-                    'src/namedError.js',
-                    'src/eventable.js',
-                    'src/store.js',
-                    'src/httpStore.js',
-                    'src/arrayStore.js',
-                    'src/data.js',
-                    'src/itemCollection.js'
-                ],
-                dest: 'dist/<%= pkg.name %>.js'
-			}
-		},
-		ngmin : {
-			dist : {
-				files : [{
-                    expand : true,
-                    cwd : 'dist',
-                    src : '<%= concat.dist.dest %>.js'
-                }]
-			}
-		},
+        browserify: {
+            build: {
+                options: {
+                    browserifyOptions: {
+                        debug: true
+                    }
+                },
+                files: {
+                    'dist/<%= pkg.name %>.js': ['src/*.js']
+                }
+            }
+        },
 		uglify : {
-			dist : {
+			build : {
 				files: {
-                    'dist/<%= pkg.name %>.min.js': ['<%= concat.dist.dest %>']
+                    'dist/<%= pkg.name %>.min.js': ['dist/<%= pkg.name %>.js']
                 }
 			}
 		}
 	});
 
 	grunt.registerTask('test', [
-        'clean:server',
+        'jshint',
         'karma:unit'
     ]);
 
 	grunt.registerTask('build', [
-        'clean:dist',
-        'jshint',
+        'clean:build',
         'test',
-        'concat',
-        'uglify'
+        'browserify:build',
+        'uglify:build'
     ]);
 
 	grunt.registerTask('default', ['build']);

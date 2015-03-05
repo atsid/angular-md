@@ -5,8 +5,10 @@
   "dependencies": {},
   "devDependencies": {
     "bower": "^1.3.12",
+    "browserify-istanbul": "^0.2.0",
     "express": "~3.4.7",
     "grunt": "^0.4.5",
+    "grunt-browserify": "^3.4.0",
     "grunt-connect-proxy": "^0.1.11",
     "grunt-contrib-clean": "^0.6.0",
     "grunt-contrib-concat": "^0.5.1",
@@ -20,11 +22,15 @@
     "grunt-usemin": "~0.1.12",
     "jasmine-core": "^2.2.0",
     "karma": "^0.12.31",
+    "karma-browserify": "^3.0.3",
     "karma-chrome-launcher": "^0.1.7",
-    "karma-coverage": "^0.2.7",
+    "karma-coverage": "0.2.6",
     "karma-jasmine": "^0.3.5",
+    "karma-phantomjs-launcher": "^0.1.4",
+    "load-grunt-tasks": "^3.1.0",
     "lodash": "latest",
-    "matchdep": "^0.3.0"
+    "matchdep": "^0.3.0",
+    "phantomjs": "^1.9.16"
   },
   "engines": {
     "node": ">=0.8.0"
